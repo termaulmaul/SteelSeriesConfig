@@ -18,7 +18,9 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-15
+    # macos-26 ships Xcode 26. The app uses NSGlassEffectView behind #available(macOS 26),
+    # which only the macOS 26 SDK declares, so an older Xcode fails to compile it.
+    runs-on: macos-26
     timeout-minutes: 45
     env:
       BUILD_NUMBER: ${{ github.run_number }}
