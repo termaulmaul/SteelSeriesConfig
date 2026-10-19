@@ -1,0 +1,136 @@
+import XCTest
+@testable import SteelSeriesConfig
+
+final class MouseSettingsTests: XCTestCase {
+
+    func testParsesRealAeroxDocument() throws {
+        let settings = try MouseSettings(parsing: Fixture.aeroxSettings)
+
+        XCTAssertEqual(settings.cpiLevelCount, 5)
+        XCTAssertEqual(settings.activeCPILevelIndex, 0)
+        XCTAssertEqual(settings.pollingRateHz, 1000)
+        XCTAssertEqual(settings.brightness, 15)
+        XCTAssertEqual(settings.powerSaveSeconds, 300)
+        XCTAssertEqual(settings.buttons.count, 2)
+        XCTAssertTrue(settings.hasButtonMappings)
+    }
+
+    /// CPI is stored in engine units; the GG client multiplies by 50.
+    /// Values below come from the live device: [4, 9, 13, 27, 38].
+    func testCPIScaleMatchesClientConversion() throws {
+        let settings = try MouseSettings(parsing: Fixture.aeroxSettings)
+
+        XCTAssertEqual(settings.cpiLevels, [200, 450, 650, 1350, 1900])
+        XCTAssertEqual(settings.activeCPI, 200)
+        XCTAssertEqual(settings.rawCPI(step: 5), 38)
+    }
+
+    func testSettingActiveCPIQuantisesToGridAndWritesCorrectStep() throws {
+        var settings = try MouseSettings(parsing: Fixture.aeroxSettings)
+
+        settings.setActiveCPIValue(1234)
+
+        XCTAssertEqual(settings.activeCPI, 1250, "Should snap to the 50-CPI grid.")
+        XCTAssertEqual(settings.rawCPI(step: 1), 25, "1234 → 1250 → 1250/50.")
+        XCTAssertEqual(settings.rawCPI(step: 2), 9, "Other steps must be untouched.")
+    }
+
+    func testCPILevelCountClampsActiveIndex() throws {
+        var settings = try MouseSettings(parsing: Fixture.aeroxSettings)
+        settings.setActiveCPILevelIndex(4)
+        XCTAssertEqual(settings.activeCPILevelIndex, 4)
+
+        settings.setCPILevelCount(2)
+        XCTAssertEqual(settings.cpiLevelCount, 2)
+        XCTAssertLessThan(settings.activeCPILevelIndex, 2)
+    }
+
+    func testPollingCodeMapMatchesClientSwitch() {
+        XCTAssertEqual(MouseSettings.hz(forPollingCode: 0), 1000)
+        XCTAssertEqual(MouseSettings.hz(forPollingCode: 1), 500)
+        XCTAssertEqual(MouseSettings.hz(forPollingCode: 2), 250)
+        XCTAssertEqual(MouseSettings.hz(forPollingCode: 3), 125)
+
+        for hz in MouseSettings.pollingRateOptions {
+            XCTAssertEqual(MouseSettings.pollingCode(forHz: hz), MouseSettings.pollingCode(forHz: hz))
+            XCTAssertEqual(MouseSettings.hz(forPollingCode: MouseSettings.pollingCode(forHz: hz)), hz)
+        }
+    }
+
+    func testSettingPollingRateKeepsStorageAsSmallCode() throws {
+        var settings = try MouseSettings(parsing: Fixture.aeroxSettings)
+        settings.setPollingRateHz(125)
+
+        XCTAssertEqual(settings.int("polling_rate", "val"), 3, "125 Hz is stored as code 3, not 125.")
+        XCTAssertEqual(settings.pollingRateHz, 125)
+    }
+
+    /// Editing one leaf must not flatten its parent or lose siblings.
+    func testNestedEditsPreserveSiblings() throws {
+        var settings = try MouseSettings(parsing: Fixture.aeroxSettings)
+
+        settings.setBrightness(7)
+        settings.setSmartLighting(false)
+        settings.setReactiveColor(red: 1, green: 2, blue: 3)
+
+        let lighting = try XCTUnwrap(settings.json["lighting_settings"]?.objectValue)
+        XCTAssertEqual(lighting["brightness"]?.intValue, 7)
+        XCTAssertEqual(lighting["idle_brightness"]?.intValue, 1, "Sibling lost.")
+        XCTAssertEqual(lighting["idle_timeout"]?.intValue, 30000, "Sibling lost.")
+        XCTAssertEqual(lighting["smart_lighting"]?.intValue, 0)
+
+        let reactive = try XCTUnwrap(settings.json["reactive_lighting"]?.objectValue)
+        let color = try XCTUnwrap(reactive["color"]?.objectValue)
+        XCTAssertEqual(color["r"]?.intValue, 1)
+        XCTAssertEqual(color["g"]?.intValue, 2)
+        XCTAssertEqual(color["b"]?.intValue, 3)
+
+        let mappings = try XCTUnwrap(settings.json["button_mappings"]?.objectValue)
+        XCTAssertEqual(mappings["no_live_deploy"]?.intValue, 1, "Unrelated branch lost.")
+    }
+
+    /// Bool vs 0/1 matters: the engine stores these as integers, and changing the
+    /// type on write is exactly the sort of drift that later breaks a reader.
+    func testIntegerTogglesStayIntegers() throws {
+        var settings = try MouseSettings(parsing: Fixture.aeroxSettings)
+        settings.setSmartLighting(false)
+        settings.setDefaultLightingEnabled(false)
+        settings.setAngleSnapping(true)
+
+        XCTAssertEqual(settings.json["lighting_settings"]?.objectValue?["smart_lighting"], .int(0))
+        XCTAssertEqual(settings.json["default_lighting_enabled"]?.objectValue?["default_lighting_enabled"], .int(0))
+        XCTAssertEqual(settings.json["angle_snapping"]?.objectValue?["level"], .int(1))
+    }
+
+    func testClamping() throws {
+        var settings = try MouseSettings(parsing: Fixture.aeroxSettings)
+
+        settings.setBrightness(99)
+        XCTAssertEqual(settings.brightness, 15)
+
+        settings.setIdleBrightness(-4)
+        XCTAssertEqual(settings.idleBrightness, 0)
+
+        settings.setActiveCPIValue(999_999)
+        XCTAssertEqual(settings.activeCPI, MouseSettings.cpiMaximum)
+
+        settings.setPowerSaveSeconds(-10)
+        XCTAssertEqual(settings.powerSaveSeconds, 0)
+    }
+
+    func testRejectsNonObjectDocuments() {
+        XCTAssertThrowsError(try MouseSettings(parsing: "[]"))
+        XCTAssertThrowsError(try MouseSettings(parsing: "{}")) { error in
+            XCTAssertEqual(error as? MouseSettings.MouseSettingsError, .notAnObject)
+        }
+        XCTAssertThrowsError(try MouseSettings(parsing: "nonsense"))
+    }
+
+    func testButtonLabelsCoverKnownHIDCodes() throws {
+        let settings = try MouseSettings(parsing: Fixture.aeroxSettings)
+        XCTAssertEqual(settings.buttons.map { $0.function }, [1, 49])
+        XCTAssertEqual(settings.buttons[0].label, "Left click")
+        XCTAssertEqual(settings.buttons[1].label, "Scroll up")
+        XCTAssertTrue(settings.buttons[0].isFactoryDefault)
+    }
+}

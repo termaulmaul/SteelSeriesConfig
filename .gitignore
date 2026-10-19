@@ -1,0 +1,20 @@
+# XcodeGen output
+SteelSeriesConfig.xcodeproj/
+
+# Build
+build/
+build-test/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# SwiftPM
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Agent bootstrap pointer (not source of truth)
+HANDOFF.md

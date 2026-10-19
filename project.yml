@@ -1,0 +1,65 @@
+name: SteelSeriesConfig
+options:
+  bundleIdPrefix: com.maul
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "-"
+    ENABLE_HARDENED_RUNTIME: YES
+    CLANG_ENABLE_MODULES: YES
+
+targets:
+  SteelSeriesConfig:
+    type: application
+    platform: macOS
+    sources:
+      - path: SteelSeriesConfig
+    info:
+      path: SteelSeriesConfig/Info.plist
+      properties:
+        CFBundleName: SteelSeries Config
+        CFBundleDisplayName: SteelSeries Config
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "14.0"
+        LSApplicationCategoryType: public.app-category.utilities
+        NSHumanReadableCopyright: ""
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.maul.steelseriesconfig
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_EMIT_LOC_STRINGS: NO
+
+  SteelSeriesConfigTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: SteelSeriesConfigTests
+    dependencies:
+      - target: SteelSeriesConfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.maul.steelseriesconfig.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  SteelSeriesConfig:
+    build:
+      targets:
+        SteelSeriesConfig: all
+        SteelSeriesConfigTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - SteelSeriesConfigTests
