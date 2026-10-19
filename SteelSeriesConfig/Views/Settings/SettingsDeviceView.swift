@@ -35,12 +35,7 @@ struct SettingsDeviceView: View {
             }
 
             Section("Sensor") {
-                toggleRow(
-                    "Angle Snapping",
-                    "Straightens fast flicks. Off is usually better for aiming.",
-                    keyPath: \.angleSnapping,
-                    setter: { $0.setAngleSnapping($1) }
-                )
+                angleSnapRow
                 toggleRow(
                     "Exact Aim",
                     "Disables angle snapping while a mapped aim button is held.",
@@ -92,7 +87,7 @@ struct SettingsDeviceView: View {
                 } header: {
                     Text("Buttons")
                 } footer: {
-                    Text("Button remapping is read-only for now: the action-code table has not been reverse-engineered, and guessing would silently rebind your mouse.")
+                    Text("Pick a different action for each button. This applies when you Save — the engine refuses to live-apply button maps, so a change never reaches the mouse until then.")
                 }
             }
         }
@@ -138,19 +133,17 @@ struct SettingsDeviceView: View {
         if let settings = store.mouseSettings {
             SettingsRow(
                 title: "CPI Ladder",
-                description: "Steps the mouse cycles through. Click a step to make it active; use the arrows to retune it."
+                description: "Steps the mouse cycles through. Type a count or use the arrows; click a step below to make it active."
             ) {
-                Stepper(
+                NumericField(
                     value: Binding(
                         get: { settings.cpiLevelCount },
                         set: { value in store.mutate { $0.setCPILevelCount(value) } }
                     ),
-                    in: 1...MouseSettings.maxCPILevels
-                ) {
-                    Text("\(settings.cpiLevelCount) step\(settings.cpiLevelCount == 1 ? "" : "s")")
-                        .monospacedDigit()
-                        .frame(minWidth: 70, alignment: .trailing)
-                }
+                    range: 1...MouseSettings.maxCPILevels,
+                    step: 1,
+                    unit: "steps"
+                )
             }
 
             ForEach(0..<settings.cpiLevelCount, id: \.self) { index in
@@ -172,20 +165,35 @@ struct SettingsDeviceView: View {
                         .buttonStyle(.plain)
                         .help("Make this the active step")
 
-                        Stepper(
+                        NumericField(
                             value: Binding(
                                 get: { settings.cpiLevels[index] },
                                 set: { value in store.mutate { $0.setCPILevelAt(index, cpi: value) } }
                             ),
-                            in: MouseSettings.cpiMinimum...MouseSettings.cpiMaximum,
-                            step: MouseSettings.cpiScale
-                        ) {
-                            Text("\(settings.cpiLevels[index]) CPI")
-                                .monospacedDigit()
-                                .frame(minWidth: 74, alignment: .trailing)
-                        }
+                            range: MouseSettings.cpiMinimum...MouseSettings.cpiMaximum,
+                            step: MouseSettings.cpiScale,
+                            unit: "CPI"
+                        )
                     }
                 }
+            }
+        }
+    }
+
+    private var angleSnapRow: some View {
+        SettingsRow(
+            title: "Angle Snapping",
+            description: "Straightens fast flicks. 0 is off; higher values straighten more aggressively. Off is usually better for aiming."
+        ) {
+            if let settings = store.mouseSettings {
+                NumericField(
+                    value: Binding(
+                        get: { settings.angleSnapLevel },
+                        set: { value in store.mutate { $0.setAngleSnapLevel(value) } }
+                    ),
+                    range: 0...10,
+                    step: 1
+                )
             }
         }
     }
@@ -213,20 +221,18 @@ struct SettingsDeviceView: View {
     private var powerSaveRow: some View {
         SettingsRow(
             title: "Idle Sleep",
-            description: "Seconds of inactivity before the sensor powers down."
+            description: "Seconds of inactivity before the sensor powers down. 0 disables it."
         ) {
             if let settings = store.mouseSettings {
-                Stepper(
+                NumericField(
                     value: Binding(
                         get: { settings.powerSaveSeconds },
                         set: { value in store.mutate { $0.setPowerSaveSeconds(value) } }
                     ),
-                    in: 0...3600,
-                    step: 30
-                ) {
-                    Text(formatDuration(settings.powerSaveSeconds))
-                        .frame(minWidth: 74, alignment: .trailing)
-                }
+                    range: 0...3600,
+                    step: 30,
+                    unit: "sec"
+                )
             }
         }
     }
@@ -236,20 +242,18 @@ struct SettingsDeviceView: View {
     private var brightnessRow: some View {
         SettingsRow(
             title: "Brightness",
-            description: "Overall lighting brightness while the mouse is in use."
+            description: "Overall lighting brightness while the mouse is in use, 0–15."
         ) {
             if let settings = store.mouseSettings {
-                Stepper(
+                NumericField(
                     value: Binding(
                         get: { settings.brightness },
                         set: { value in store.mutate { $0.setBrightness(value) } }
                     ),
-                    in: 0...15
-                ) {
-                    Text("\(settings.brightness) / 15")
-                        .monospacedDigit()
-                        .frame(minWidth: 74, alignment: .trailing)
-                }
+                    range: 0...15,
+                    step: 1,
+                    unit: "/ 15"
+                )
             }
         }
     }
@@ -257,20 +261,18 @@ struct SettingsDeviceView: View {
     private var idleBrightnessRow: some View {
         SettingsRow(
             title: "Idle Brightness",
-            description: "Brightness used after the mouse stops moving."
+            description: "Brightness used after the mouse stops moving, 0–15."
         ) {
             if let settings = store.mouseSettings {
-                Stepper(
+                NumericField(
                     value: Binding(
                         get: { settings.idleBrightness },
                         set: { value in store.mutate { $0.setIdleBrightness(value) } }
                     ),
-                    in: 0...15
-                ) {
-                    Text("\(settings.idleBrightness) / 15")
-                        .monospacedDigit()
-                        .frame(minWidth: 74, alignment: .trailing)
-                }
+                    range: 0...15,
+                    step: 1,
+                    unit: "/ 15"
+                )
             }
         }
     }
@@ -281,17 +283,15 @@ struct SettingsDeviceView: View {
             description: "Seconds before idle brightness takes over."
         ) {
             if let settings = store.mouseSettings {
-                Stepper(
+                NumericField(
                     value: Binding(
                         get: { settings.idleTimeoutSeconds },
                         set: { value in store.mutate { $0.setIdleTimeoutSeconds(value) } }
                     ),
-                    in: 0...3600,
-                    step: 5
-                ) {
-                    Text(formatDuration(settings.idleTimeoutSeconds))
-                        .frame(minWidth: 74, alignment: .trailing)
-                }
+                    range: 0...3600,
+                    step: 5,
+                    unit: "sec"
+                )
             }
         }
     }
@@ -300,21 +300,26 @@ struct SettingsDeviceView: View {
 
     private var buttonRows: some View {
         ForEach(store.mouseSettings?.buttons ?? []) { button in
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(button.label)
-                        .font(.body)
-                    Text("HID code \(button.function)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .monospacedDigit()
+            SettingsRow(
+                title: button.label,
+                description: "Action code \(button.function)."
+            ) {
+                Picker("", selection: Binding(
+                    get: { button.function },
+                    set: { value in store.mutate { $0.setButtonFunction(at: button.index, function: value) } }
+                )) {
+                    ForEach(MouseSettings.buttonFunctions) { option in
+                        Text(option.label).tag(option.code)
+                    }
+                    // Keep the current code selectable even if it is outside the
+                    // catalog above, so opening the window never silently rewrites an
+                    // action this app does not model.
+                    if !MouseSettings.buttonFunctions.contains(where: { $0.code == button.function }) {
+                        Text("HID \(button.function)").tag(button.function)
+                    }
                 }
-
-                Spacer()
-
-                Text(button.isFactoryDefault ? "Default" : "Remapped")
-                    .font(.caption)
-                    .foregroundColor(button.isFactoryDefault ? .secondary : .accentColor)
+                .labelsHidden()
+                .fixedSize()
             }
         }
     }
@@ -336,14 +341,5 @@ struct SettingsDeviceView: View {
             .toggleStyle(.switch)
             .controlSize(.small)
         }
-    }
-
-    private func formatDuration(_ seconds: Int) -> String {
-        guard seconds > 0 else { return "Off" }
-        if seconds % 60 == 0 && seconds >= 60 {
-            let minutes = seconds / 60
-            return "\(minutes) min"
-        }
-        return "\(seconds) sec"
     }
 }

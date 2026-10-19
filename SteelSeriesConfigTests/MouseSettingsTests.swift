@@ -133,4 +133,58 @@ final class MouseSettingsTests: XCTestCase {
         XCTAssertEqual(settings.buttons[1].label, "Scroll up")
         XCTAssertTrue(settings.buttons[0].isFactoryDefault)
     }
+
+    func testButtonsCarryStablePositionalIdentity() throws {
+        var settings = try MouseSettings(parsing: Fixture.aeroxSettings)
+
+        settings.setButtonFunction(at: 1, function: 1)
+
+        XCTAssertEqual(settings.buttons.map(\.function), [1, 1])
+        XCTAssertEqual(settings.buttons.map(\.index), [0, 1], "Identity must follow position, not the code.")
+        XCTAssertEqual(settings.buttons.map(\.id), [0, 1])
+    }
+
+    func testRemappingOneButtonPreservesTheRest() throws {
+        var settings = try MouseSettings(parsing: Fixture.aeroxSettings)
+
+        settings.setButtonFunction(at: 0, function: 2)
+
+        XCTAssertEqual(settings.buttons[0].function, 2)
+        XCTAssertEqual(settings.buttons[1].function, 49, "Sibling button lost.")
+        XCTAssertEqual(settings.buttons[0].keyCodes, [0, 0, 0, 0], "key_codes must be preserved.")
+
+        let mappings = try XCTUnwrap(settings.json["button_mappings"]?.objectValue)
+        XCTAssertEqual(mappings["no_live_deploy"]?.intValue, 1, "no_live_deploy must survive the edit.")
+    }
+
+    func testRemappingOutOfRangeIndexIsIgnored() throws {
+        var settings = try MouseSettings(parsing: Fixture.aeroxSettings)
+        let before = try settings.encodedString()
+
+        settings.setButtonFunction(at: 9, function: 3)
+
+        XCTAssertEqual(try settings.encodedString(), before)
+    }
+
+    /// Angle snapping is a 0…10 strength, not a switch — the GG client's own template
+    /// binds `angle_snapping.level` to `snapLevelRange: [0…10]`.
+    func testAngleSnapLevelClampsToTen() throws {
+        var settings = try MouseSettings(parsing: Fixture.aeroxSettings)
+
+        XCTAssertEqual(settings.angleSnapLevel, 0)
+        settings.setAngleSnapLevel(7)
+        XCTAssertEqual(settings.angleSnapLevel, 7)
+        XCTAssertTrue(settings.angleSnapping)
+
+        settings.setAngleSnapLevel(99)
+        XCTAssertEqual(settings.angleSnapLevel, 10)
+
+        settings.setAngleSnapLevel(0)
+        XCTAssertFalse(settings.angleSnapping)
+    }
+
+    func testButtonFunctionCatalogCoversTheDefaults() {
+        let codes = Set(MouseSettings.buttonFunctions.map(\.code))
+        XCTAssertTrue(codes.isSuperset(of: [1, 2, 3, 4, 5, 48, 49, 50]))
+    }
 }

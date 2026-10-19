@@ -489,6 +489,7 @@ final class ConfigurationStore {
         else {
             linkPhase = .offline
             batteryStatus = nil
+            hostBatteryCache = nil
             return
         }
 
@@ -496,13 +497,45 @@ final class ConfigurationStore {
         let resolved = LinkPhase(rfPayload: rf ?? .null)
         linkPhase = resolved
 
-        guard resolved.isUsable else {
-            batteryStatus = nil
-            return
+        // The engine can only answer `charge_status` over a dongle link: a mouse on
+        // Bluetooth returns an empty payload even though it is attached and working,
+        // so there is nothing to parse and the GG client shows no battery either. When
+        // the engine has nothing, fall back to what macOS itself reports for the
+        // Bluetooth peripheral — the same number System Settings shows.
+        let charge: AnyJSONValue? = resolved.isUsable
+            ? await (try? engine.deviceCommand(id: deviceID, command: ["charge_status": .object([:])]))
+            : nil
+
+        if let status = charge.flatMap({ BatteryStatus(payload: $0) }) {
+            batteryStatus = status
+        } else {
+            batteryStatus = await hostBattery(for: device)
+        }
+    }
+
+    /// Cached result of the macOS Bluetooth battery read, which costs a process launch.
+    private var hostBatteryCache: (status: BatteryStatus?, at: Date)?
+    private static let hostBatteryTTL: TimeInterval = 20
+
+    /// Battery as reported by macOS for a Bluetooth peripheral, cached briefly.
+    ///
+    /// Only ever the fallback: over a dongle the engine's `charge_status` also carries
+    /// the charging state, which macOS does not expose, so the engine's answer is
+    /// preferred wherever it exists. A `nil` result is cached too — a device macOS
+    /// cannot see does not need the question asked every three seconds.
+    private func hostBattery(for device: Device) async -> BatteryStatus? {
+        if let cache = hostBatteryCache, Date().timeIntervalSince(cache.at) < Self.hostBatteryTTL {
+            return cache.status
         }
 
-        let charge = await (try? engine.deviceCommand(id: deviceID, command: ["charge_status": .object([:])]))
-        batteryStatus = charge.flatMap { BatteryStatus(payload: $0) }
+        let readings = (await HostBatteryReader.rawJSON()).map(HostBatteryReader.parse) ?? []
+        let name = device.fullName.isEmpty ? device.name : device.fullName
+        let reading = HostBatteryReader.mouse(in: readings, preferringName: name)
+        let status = reading.map {
+            BatteryStatus(percent: $0.percent, isCharging: false, isCharged: $0.percent >= 100)
+        }
+        hostBatteryCache = (status, Date())
+        return status
     }
 
     private func refreshSyncStatus(deviceID: Int) async {

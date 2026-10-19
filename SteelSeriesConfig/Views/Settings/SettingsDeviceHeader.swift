@@ -24,6 +24,10 @@ struct SettingsDeviceHeader: View {
                         .foregroundColor(.secondary)
 
                     statusBadge
+
+                    if let battery = store.batteryStatus {
+                        BatteryBadgeView(status: battery)
+                    }
                 }
             }
 

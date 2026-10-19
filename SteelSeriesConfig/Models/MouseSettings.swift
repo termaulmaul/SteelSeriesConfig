@@ -1,17 +1,35 @@
 import Foundation
 
+/// One selectable button action, keyed by the numeric `function` the engine stores.
+///
+/// Codes copied from the GG client's own button tables (`{name, code}` entries under
+/// `macroEditor.mouseButton`, in module `166`), not guessed. This is the *mouse-button*
+/// half of the action model only: assigning a keyboard key, media key, macro or "launch
+/// application" to a button uses a different code family (`KeyActionCode` /
+/// `MediaActionCode`, values 16/81/17/97) plus a keycode table that has not been
+/// extracted, and is deliberately out of scope.
+struct ButtonFunction: Identifiable, Equatable, Sendable {
+    let code: Int
+    let label: String
+
+    var id: Int { code }
+}
+
 /// A mouse button as stored in `settings.button_mappings.buttons`.
 ///
 /// `function` is the button's HID code, not an action id: `1…5` are B1…B5, `49`/`50`
-/// are scroll up/down, `48` is the sixth physical button on six-button mice.
-/// `key_codes` is a four-slot HID remap; all zeros means "factory default action".
-/// Remapping is intentionally not exposed yet — the action-code table has not been
-/// extracted, and guessing would silently rebind someone's mouse.
+/// are scroll up/down, `48` is the CPI toggle. `key_codes` is a four-slot HID remap;
+/// all zeros means "factory default action".
+///
+/// `index` is the row's position in the array, which is what makes it `Identifiable`:
+/// after a remap two buttons can legitimately carry the same `function` value, so the
+/// function code is not a stable identity.
 struct MouseButton: Identifiable, Equatable, Sendable {
+    let index: Int
     let function: Int
     let keyCodes: [Int]
 
-    var id: Int { function }
+    var id: Int { index }
 
     /// Physical position label. Unknown codes fall back to a numeric label rather
     /// than being hidden.
@@ -22,9 +40,14 @@ struct MouseButton: Identifiable, Equatable, Sendable {
         case 3: return "Middle click"
         case 4: return "Back"
         case 5: return "Forward"
-        case 48: return "Button 6"
+        case 6, 7, 8: return "Button \(function)"
+        case 12: return "Tilt left"
+        case 13: return "Tilt right"
+        case 48: return "CPI toggle"
         case 49: return "Scroll up"
         case 50: return "Scroll down"
+        case 51: return "Tilt left (acpan)"
+        case 52: return "Tilt right (acpan)"
         default: return "Button \(function)"
         }
     }
@@ -204,8 +227,17 @@ struct MouseSettings: Equatable, Sendable {
 
     // MARK: Sensor toggles
 
-    var angleSnapping: Bool { int("angle_snapping", "level") != 0 }
-    mutating func setAngleSnapping(_ on: Bool) { setInt(on ? 1 : 0, "angle_snapping", "level") }
+    /// Angle-snapping strength, 0…10 as the GG client stores it (`angle_snapping.level`
+    /// with `snapLevelRange: [0…10]`). `0` is off.
+    var angleSnapLevel: Int { int("angle_snapping", "level") }
+    mutating func setAngleSnapLevel(_ level: Int) {
+        setInt(clamped(level, 0, 10), "angle_snapping", "level")
+    }
+
+    /// Convenience view of ``angleSnapLevel`` for callers that only care whether the
+    /// feature is on at all.
+    var angleSnapping: Bool { angleSnapLevel != 0 }
+    mutating func setAngleSnapping(_ on: Bool) { setAngleSnapLevel(on ? 1 : 0) }
 
     var exactAim: Bool { int("exact_aim", "level") != 0 }
     mutating func setExactAim(_ on: Bool) { setInt(on ? 1 : 0, "exact_aim", "level") }
@@ -276,15 +308,54 @@ struct MouseSettings: Equatable, Sendable {
 
     var buttons: [MouseButton] {
         guard let array = value(["button_mappings", "buttons"])?.arrayValue else { return [] }
-        return array.compactMap { entry in
+        return array.enumerated().compactMap { index, entry in
             guard let object = entry.objectValue,
                   let function = object["function"]?.intValue else { return nil }
             let codes = (object["key_codes"]?.arrayValue ?? []).compactMap { $0.intValue }
-            return MouseButton(function: function, keyCodes: codes)
+            return MouseButton(index: index, function: function, keyCodes: codes)
         }
     }
 
     var hasButtonMappings: Bool { value(["button_mappings"]) != nil }
+
+    /// Every action this app is willing to assign, in the order the GG client presents
+    /// them. Left / right / middle come first because the client warns (and a mouse
+    /// needs) at least one left-click somewhere.
+    static let buttonFunctions: [ButtonFunction] = [
+        ButtonFunction(code: 1, label: "Left click"),
+        ButtonFunction(code: 2, label: "Right click"),
+        ButtonFunction(code: 3, label: "Middle click"),
+        ButtonFunction(code: 4, label: "Back"),
+        ButtonFunction(code: 5, label: "Forward"),
+        ButtonFunction(code: 12, label: "Tilt left"),
+        ButtonFunction(code: 13, label: "Tilt right"),
+        ButtonFunction(code: 48, label: "CPI toggle"),
+        ButtonFunction(code: 49, label: "Scroll up"),
+        ButtonFunction(code: 50, label: "Scroll down")
+    ]
+
+    /// Change which action a button performs, by array position.
+    ///
+    /// Only the `function` field is touched: the row's `key_codes` and every sibling
+    /// field of the surrounding `button_mappings` object are preserved, the same
+    /// read-modify-write discipline the rest of this type follows.
+    ///
+    /// Note this key is marked `no_live_deploy`, so the change cannot reach the device
+    /// on its own — a live apply strips it (see ``encodedStringForLiveDeploy()``). It
+    /// takes effect when Save deploys the full configuration, which is also the only
+    /// write path that backs the document up first.
+    mutating func setButtonFunction(at index: Int, function: Int) {
+        guard var mappings = value(["button_mappings"])?.objectValue,
+              var array = mappings["buttons"]?.arrayValue,
+              array.indices.contains(index),
+              var row = array[index].objectValue
+        else { return }
+
+        row["function"] = .int(function)
+        array[index] = .object(row)
+        mappings["buttons"] = .array(array)
+        json["button_mappings"] = .object(mappings)
+    }
 
     // MARK: - Writing
 
