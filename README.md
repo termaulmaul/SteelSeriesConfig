@@ -211,6 +211,24 @@ xcodebuild -project SteelSeriesConfig.xcodeproj \
 The app is signed ad-hoc (`CODE_SIGN_IDENTITY: "-"`), which is enough for a local build.
 Copy `SteelSeriesConfig.app` from the build products into `/Applications` to install it.
 
+### Releases and in-app updates
+
+Every push to `main` runs `.github/workflows/build.yml` on a macOS runner with Xcode. The
+run executes the unit tests, builds the Release app, and publishes it as a GitHub release
+tagged `build-<run number>`, with the zipped app and a SHA-256 checksum next to it. The
+build number is written into `CFBundleVersion`, so a local build reports build `1`.
+
+The app checks that release every six hours, and on demand from *Settings → App → Check
+Now*. A newer build is downloaded in the background, checked against its published
+checksum, and its code signature is verified. Nothing is replaced until you press
+**Install & Relaunch**, and that button stays disabled while a save is running or edits are
+unsaved.
+
+The build is ad-hoc signed and not notarized, so macOS blocks the first launch of a copy
+downloaded in a browser. Right-click the app and choose *Open*, or run
+`xattr -dr com.apple.quarantine /Applications/SteelSeriesConfig.app`. Updates installed from
+inside the app do not need this.
+
 ### Tests
 
 ```sh

@@ -5,6 +5,7 @@ import SwiftUI
 struct SettingsAppView: View {
 
     @Environment(ConfigurationStore.self) private var store
+    private let updates = UpdateChecker.shared
 
     var body: some View {
         Form {
@@ -68,12 +69,43 @@ struct SettingsAppView: View {
                 }
             }
 
+            Section("Updates") {
+                SettingsRow(
+                    title: "Status",
+                    description: "Checked against GitHub every six hours and downloaded in the background. Nothing is replaced until you install."
+                ) {
+                    updateStatusLabel
+                }
+
+                SettingsRow(
+                    title: "Check for updates",
+                    description: "Installed: \(UpdateChecker.installedDescription)."
+                ) {
+                    Button("Check Now") {
+                        Task { await updates.checkForUpdates() }
+                    }
+                    .disabled(updates.isWorking)
+                }
+
+                if let build = updates.readyBuild {
+                    SettingsRow(
+                        title: "Build \(build) is ready",
+                        description: updates.installBlockReason ?? "Replaces this app and relaunches it."
+                    ) {
+                        Button("Install & Relaunch") {
+                            updates.install()
+                        }
+                        .disabled(updates.installBlockReason != nil)
+                    }
+                }
+            }
+
             Section("About") {
                 SettingsRow(
                     title: "SteelSeries Config",
                     description: "Unofficial, login-free configuration tool for SteelSeries peripherals. Not affiliated with SteelSeries. Writes are read-modify-write with an automatic pre-write backup; the settings schema was derived by reverse-engineering the official client."
                 ) {
-                    Text("0.1.0")
+                    Text(UpdateChecker.installedDescription)
                         .font(.callout)
                         .monospacedDigit()
                         .foregroundColor(.secondary)
@@ -82,6 +114,32 @@ struct SettingsAppView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    @ViewBuilder
+    private var updateStatusLabel: some View {
+        switch updates.state {
+        case .idle:
+            Text("Not checked yet")
+                .foregroundColor(.secondary)
+        case .checking:
+            Label("Checking…", systemImage: "arrow.triangle.2.circlepath")
+                .foregroundColor(.secondary)
+        case .upToDate:
+            Label("Up to date", systemImage: "checkmark.circle.fill")
+                .foregroundColor(.green)
+        case .downloading(let build):
+            Label("Downloading build \(build)…", systemImage: "arrow.down.circle")
+                .foregroundColor(.secondary)
+        case .ready(let build):
+            Label("Build \(build) ready", systemImage: "checkmark.circle.fill")
+                .foregroundColor(.green)
+        case .failed(let message):
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+                .foregroundColor(.orange)
+                .lineLimit(2)
+                .multilineTextAlignment(.trailing)
+        }
     }
 
     @ViewBuilder

@@ -13,8 +13,23 @@ import SwiftUI
 struct BarView: View {
 
     @Environment(ConfigurationStore.self) private var store
+    private let updates = UpdateChecker.shared
 
     var body: some View {
+        VStack(spacing: 0) {
+            content
+
+            // Shown on every page, not just the connected one: a downloaded update is
+            // independent of whether the mouse is currently reachable.
+            if updates.readyBuild != nil {
+                Divider()
+                UpdateBannerView()
+                    .padding(16)
+            }
+        }
+    }
+
+    private var content: some View {
         Group {
             switch store.phase {
             case .booting:

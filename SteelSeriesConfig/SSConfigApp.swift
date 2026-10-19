@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.insert()
 
         Task { await ConfigurationStore.shared.bootstrap() }
+        UpdateChecker.shared.start()
     }
 
     func applicationShouldHandleReopen(

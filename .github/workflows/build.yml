@@ -1,0 +1,92 @@
+name: Build
+
+# Every push to main builds the app on a macOS runner with Xcode, runs the unit tests,
+# and publishes the result as release `build-<run number>`. The in-app updater reads
+# that release, so the run number here must match CFBundleVersion (set below).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-main
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      BUILD_NUMBER: ${{ github.run_number }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Show toolchain
+        run: xcodebuild -version
+
+      - name: Run unit tests
+        run: |
+          xcodebuild test \
+            -project SteelSeriesConfig.xcodeproj \
+            -scheme SteelSeriesConfig \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+
+      - name: Build Release
+        run: |
+          xcodebuild build \
+            -project SteelSeriesConfig.xcodeproj \
+            -scheme SteelSeriesConfig \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+
+      - name: Verify and package
+        run: |
+          APP=build/Build/Products/Release/SteelSeriesConfig.app
+          ZIP="SteelSeriesConfig-$BUILD_NUMBER.zip"
+
+          # The updater refuses a bundle whose build number differs from the tag.
+          test "$(plutil -extract CFBundleVersion raw "$APP/Contents/Info.plist")" = "$BUILD_NUMBER"
+          codesign --verify --deep --strict "$APP"
+
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "dist/$ZIP"
+          # Run from dist/ so the checksum file names the zip by its bare name.
+          (cd dist && shasum -a 256 "$ZIP" > "$ZIP.sha256" && shasum -a 256 -c "$ZIP.sha256")
+
+      - name: Publish release
+        run: |
+          TAG="build-$BUILD_NUMBER"
+          ZIP="dist/SteelSeriesConfig-$BUILD_NUMBER.zip"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # A re-run of the same run number replaces its assets instead of failing.
+            gh release upload "$TAG" "$ZIP" "$ZIP.sha256" --clobber
+          else
+            gh release create "$TAG" "$ZIP" "$ZIP.sha256" \
+              --target "$GITHUB_SHA" \
+              --title "Build $BUILD_NUMBER" \
+              --notes "Built from $GITHUB_SHA by workflow run $BUILD_NUMBER." \
+              --latest
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SteelSeriesConfig-${{ github.run_number }}
+          path: dist/
