@@ -215,7 +215,8 @@ Copy `SteelSeriesConfig.app` from the build products into `/Applications` to ins
 
 Every push to `main` runs `.github/workflows/build.yml` on a macOS runner with Xcode. The
 run executes the unit tests, builds the Release app, and publishes it as a GitHub release
-tagged `build-<run number>`, with the zipped app and a SHA-256 checksum next to it. The
+tagged `build-<run number>`. The release carries a DMG (drag the app onto *Applications*)
+and a SHA-256 checksum, and its notes list the commits since the previous release. The
 build number is written into `CFBundleVersion`, so a local build reports build `1`.
 
 The app checks that release every six hours, and on demand from *Settings → App → Check

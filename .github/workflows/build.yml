@@ -1,8 +1,8 @@
 name: Build
 
 # Every push to main builds the app on a macOS runner with Xcode, runs the unit tests,
-# and publishes the result as release `build-<run number>`. The in-app updater reads
-# that release, so the run number here must match CFBundleVersion (set below).
+# and publishes a DMG as release `build-<run number>` with a SHA-256 checksum. The
+# in-app updater reads that release, so the run number here must match CFBundleVersion.
 
 on:
   push:
@@ -27,7 +27,10 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          # The release notes list every commit since the previous release.
+          fetch-depth: 0
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -36,7 +39,9 @@ jobs:
         run: xcodegen generate
 
       - name: Show toolchain
-        run: xcodebuild -version
+        run: |
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-version
 
       - name: Run unit tests
         run: |
@@ -57,38 +62,104 @@ jobs:
             -derivedDataPath build \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
-      - name: Verify and package
+      - name: Package DMG
         run: |
           APP=build/Build/Products/Release/SteelSeriesConfig.app
-          ZIP="SteelSeriesConfig-$BUILD_NUMBER.zip"
+          DMG="SteelSeriesConfig-$BUILD_NUMBER.dmg"
+          STAGE="$RUNNER_TEMP/dmg-stage"
+          MOUNT="$RUNNER_TEMP/dmg-mount"
 
           # The updater refuses a bundle whose build number differs from the tag.
           test "$(plutil -extract CFBundleVersion raw "$APP/Contents/Info.plist")" = "$BUILD_NUMBER"
           codesign --verify --deep --strict "$APP"
 
-          mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent "$APP" "dist/$ZIP"
-          # Run from dist/ so the checksum file names the zip by its bare name.
-          (cd dist && shasum -a 256 "$ZIP" > "$ZIP.sha256" && shasum -a 256 -c "$ZIP.sha256")
+          # The image shows the app next to an alias to /Applications: drag to install.
+          rm -rf "$STAGE" && mkdir -p "$STAGE" dist
+          ditto "$APP" "$STAGE/SteelSeriesConfig.app"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "SteelSeries Config" -srcfolder "$STAGE" -ov -format UDZO "dist/$DMG"
+          hdiutil verify "dist/$DMG"
+
+          # Checksum from inside dist/, so the file names the image by its bare name.
+          (cd dist && shasum -a 256 "$DMG" > "$DMG.sha256" && shasum -a 256 -c "$DMG.sha256")
+
+          # Mount read-only and check what the updater will copy out of the image.
+          mkdir -p "$MOUNT"
+          hdiutil attach -readonly -nobrowse -noautoopen -mountpoint "$MOUNT" "dist/$DMG"
+          test "$(plutil -extract CFBundleVersion raw "$MOUNT/SteelSeriesConfig.app/Contents/Info.plist")" = "$BUILD_NUMBER"
+          codesign --verify --deep --strict "$MOUNT/SteelSeriesConfig.app"
+          hdiutil detach "$MOUNT"
+
+      - name: Prepare release notes
+        run: |
+          APP=build/Build/Products/Release/SteelSeriesConfig.app
+          DMG="SteelSeriesConfig-$BUILD_NUMBER.dmg"
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          VERSION=$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+
+          # Commits since the previous release, if its target is a commit SHA.
+          PREVIOUS=$(gh api "repos/$GH_REPO/releases/latest" --jq .target_commitish 2>/dev/null || true)
+          if [[ "$PREVIOUS" =~ ^[0-9a-f]{40}$ ]] && git cat-file -e "$PREVIOUS^{commit}" 2>/dev/null; then
+            COMMITS=$(git log --no-merges --format='- %s' "$PREVIOUS..HEAD")
+          else
+            COMMITS=$(git log --no-merges --format='- %s' -n 20 HEAD)
+          fi
+          if [ -z "$COMMITS" ]; then
+            COMMITS="- No new commits since the previous build."
+          fi
+
+          cat > "$NOTES" <<EOF
+          ## 🚀 What's New
+
+          $COMMITS
+
+          ## 📦 Build Info
+          - Version: $VERSION (build $BUILD_NUMBER)
+          - Commit: $SHORT_SHA
+          - Build Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          - Toolchain: $(xcodebuild -version | paste -sd ' ' -)
+
+          ## 📥 Install
+          1. Download \`$DMG\`.
+          2. Open the image and drag **SteelSeries Config** onto **Applications**.
+          3. The app is not notarized. On first launch, right-click it and choose **Open**.
+
+          Later builds install from inside the app: *Settings → App → Check Now*.
+
+          ## 🔐 Verify
+          \`\`\`sh
+          shasum -a 256 -c $DMG.sha256
+          \`\`\`
+
+          ## ⚠️ Requirements
+          - macOS 14 or later.
+          - SteelSeries GG installed and running. The app talks to its local engine.
+          EOF
+
+          printf '%s' "SteelSeries Config $VERSION (build $BUILD_NUMBER)" > "$RUNNER_TEMP/release-title.txt"
 
       - name: Publish release
         run: |
           TAG="build-$BUILD_NUMBER"
-          ZIP="dist/SteelSeriesConfig-$BUILD_NUMBER.zip"
+          DMG="dist/SteelSeriesConfig-$BUILD_NUMBER.dmg"
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          TITLE=$(cat "$RUNNER_TEMP/release-title.txt")
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            # A re-run of the same run number replaces its assets instead of failing.
-            gh release upload "$TAG" "$ZIP" "$ZIP.sha256" --clobber
+            # A re-run of the same run number refreshes the release instead of failing.
+            gh release edit "$TAG" --title "$TITLE" --notes-file "$NOTES"
+            gh release upload "$TAG" "$DMG" "$DMG.sha256" --clobber
           else
-            gh release create "$TAG" "$ZIP" "$ZIP.sha256" \
+            gh release create "$TAG" "$DMG" "$DMG.sha256" \
               --target "$GITHUB_SHA" \
-              --title "Build $BUILD_NUMBER" \
-              --notes "Built from $GITHUB_SHA by workflow run $BUILD_NUMBER." \
+              --title "$TITLE" \
+              --notes-file "$NOTES" \
               --latest
           fi
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SteelSeriesConfig-${{ github.run_number }}
           path: dist/

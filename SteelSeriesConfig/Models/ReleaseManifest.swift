@@ -40,8 +40,8 @@ enum ReleaseManifest {
     /// A build confirmed to be newer and complete, ready to download.
     struct Offer: Equatable {
         let build: Int
-        let zipName: String
-        let zipURL: URL
+        let dmgName: String
+        let dmgURL: URL
         let checksumName: String
         let checksumURL: URL
     }
@@ -51,12 +51,12 @@ enum ReleaseManifest {
         return Int(tag.dropFirst(tagPrefix.count))
     }
 
-    static func zipName(build: Int) -> String {
-        "SteelSeriesConfig-\(build).zip"
+    static func dmgName(build: Int) -> String {
+        "SteelSeriesConfig-\(build).dmg"
     }
 
     static func checksumName(build: Int) -> String {
-        zipName(build: build) + ".sha256"
+        dmgName(build: build) + ".sha256"
     }
 
     /// The download for `release`, but only if it is a published, complete build
@@ -68,18 +68,18 @@ enum ReleaseManifest {
               build > installedBuild
         else { return nil }
 
-        let zipFile = zipName(build: build)
+        let dmgFile = dmgName(build: build)
         let checksumFile = checksumName(build: build)
-        guard let zip = release.assets.first(where: { $0.name == zipFile }),
+        guard let dmg = release.assets.first(where: { $0.name == dmgFile }),
               let checksum = release.assets.first(where: { $0.name == checksumFile }),
-              isTrusted(zip.browserDownloadURL),
+              isTrusted(dmg.browserDownloadURL),
               isTrusted(checksum.browserDownloadURL)
         else { return nil }
 
         return Offer(
             build: build,
-            zipName: zipFile,
-            zipURL: zip.browserDownloadURL,
+            dmgName: dmgFile,
+            dmgURL: dmg.browserDownloadURL,
             checksumName: checksumFile,
             checksumURL: checksum.browserDownloadURL
         )

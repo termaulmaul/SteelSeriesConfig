@@ -193,17 +193,17 @@ final class UpdateChecker {
 
     private static func download(_ offer: ReleaseManifest.Offer) async throws -> URL {
         let folder = try prepareStagingFolder(build: offer.build)
-        let zipFile = folder.appendingPathComponent(offer.zipName)
+        let dmgFile = folder.appendingPathComponent(offer.dmgName)
 
-        let (downloaded, zipResponse) = try await URLSession.shared.download(from: offer.zipURL)
-        try requireOK(zipResponse)
-        try FileManager.default.moveItem(at: downloaded, to: zipFile)
+        let (downloaded, dmgResponse) = try await URLSession.shared.download(from: offer.dmgURL)
+        try requireOK(dmgResponse)
+        try FileManager.default.moveItem(at: downloaded, to: dmgFile)
 
         let (checksum, checksumResponse) = try await URLSession.shared.data(from: offer.checksumURL)
         try requireOK(checksumResponse)
 
         return try await Task.detached {
-            try verifyAndUnpack(zip: zipFile, checksum: checksum, offer: offer)
+            try verifyAndCopyOut(dmg: dmgFile, checksum: checksum, offer: offer)
         }.value
     }
 
@@ -220,23 +220,31 @@ final class UpdateChecker {
         return folder
     }
 
-    nonisolated private static func verifyAndUnpack(
-        zip: URL,
+    /// Checks the image against its published checksum, then copies the app out of it.
+    /// The image is mounted read-only and detached again before this returns.
+    nonisolated private static func verifyAndCopyOut(
+        dmg: URL,
         checksum: Data,
         offer: ReleaseManifest.Offer
     ) throws -> URL {
         let published = ReleaseManifest.checksum(
             fromFileText: String(decoding: checksum, as: UTF8.self),
-            fileName: offer.zipName
+            fileName: offer.dmgName
         )
-        let actual = ReleaseManifest.sha256Hex(of: try Data(contentsOf: zip))
+        let actual = ReleaseManifest.sha256Hex(of: try Data(contentsOf: dmg))
         guard let published, published == actual else { throw UpdateError.integrity }
 
-        let unpacked = zip.deletingLastPathComponent().appendingPathComponent("unpacked", isDirectory: true)
-        try run("/usr/bin/ditto", ["-x", "-k", zip.path, unpacked.path])
+        let folder = dmg.deletingLastPathComponent()
+        let mountPoint = folder.appendingPathComponent("mounted", isDirectory: true)
+        try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: true)
+        try run("/usr/bin/hdiutil", [
+            "attach", "-readonly", "-nobrowse", "-noautoopen",
+            "-mountpoint", mountPoint.path, dmg.path,
+        ])
+        defer { try? run("/usr/bin/hdiutil", ["detach", mountPoint.path, "-quiet"]) }
 
-        let app = unpacked.appendingPathComponent(ReleaseManifest.appName, isDirectory: true)
-        guard let bundle = Bundle(url: app),
+        let mounted = mountPoint.appendingPathComponent(ReleaseManifest.appName, isDirectory: true)
+        guard let bundle = Bundle(url: mounted),
               ReleaseManifest.accepts(
                   bundleIdentifier: bundle.bundleIdentifier,
                   build: bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
@@ -244,6 +252,10 @@ final class UpdateChecker {
               )
         else { throw UpdateError.invalidBundle }
 
+        // Copy out before verifying: the signature is checked on the bundle that will be
+        // installed, and the image is detached as soon as this function returns.
+        let app = folder.appendingPathComponent(ReleaseManifest.appName, isDirectory: true)
+        try run("/usr/bin/ditto", [mounted.path, app.path])
         try run("/usr/bin/codesign", ["--verify", "--deep", "--strict", app.path])
         return app
     }
