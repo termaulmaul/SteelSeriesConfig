@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// Popover header: device artwork, name, and a one-line status.
+/// Popover header: device artwork, name, and one line of live status.
 ///
-/// The status line deliberately reports what the *engine* says — connected and
-/// in-sync are separate facts, and a mouse that is connected but running a stale
-/// profile looks fine until you notice it.
+/// The line folds three independent facts — engine attachment, wireless link, and
+/// deployment sync — into one readable string. They stay separate in the store because
+/// they come from separate sources and can disagree: a mouse whose dongle is plugged in
+/// but which is switched off is attached and not linked, and reporting only one of
+/// those would tell a story the other half contradicts.
 struct BarHeaderView: View {
 
     @Environment(ConfigurationStore.self) private var store
@@ -25,10 +27,25 @@ struct BarHeaderView: View {
                     .minimumScaleFactor(0.7)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text(statusLine)
-                    .font(.caption2)
-                    .foregroundColor(statusColor)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    ConnectionDotView(phase: store.displayPhase)
+
+                    Text(statusLine)
+                        .font(.caption2)
+                        .foregroundColor(statusColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+
+                    if let battery = store.batteryStatus, store.canReachDevice {
+                        Text("·")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+
+                        BatteryBadgeView(status: battery)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
             }
 
             BarSettingsButton()
@@ -37,21 +54,18 @@ struct BarHeaderView: View {
     }
 
     private var statusLine: String {
-        guard let device = store.selectedDevice else { return "No device" }
-        guard device.connected.value else { return "Disconnected" }
+        guard store.selectedDevice != nil else { return "No device" }
 
-        var parts = ["Connected"]
-        if let sync = store.syncStatus {
-            parts.append(sync.isSynced.value ? "in sync" : "not deployed")
-        } else {
-            parts.append("connected")
-        }
-        return parts.joined(separator: " · ")
+        let phase = store.displayPhase
+        guard phase.isUsable, let sync = store.syncStatus else { return phase.label }
+
+        return sync.isSynced.value ? "\(phase.label) · in sync" : "\(phase.label) · not deployed"
     }
 
     private var statusColor: Color {
-        guard store.selectedDevice?.connected.value == true else { return .secondary }
-        guard let sync = store.syncStatus else { return .secondary }
-        return sync.isSynced.value ? .secondary : .orange
+        if !store.canReachDevice { return .secondary }
+        if let sync = store.syncStatus, !sync.isSynced.value { return .orange }
+        if store.displayPhase == .ready { return .secondary }
+        return store.displayPhase.isUsable ? .secondary : .orange
     }
 }

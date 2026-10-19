@@ -34,11 +34,12 @@ struct SettingsDeviceHeader: View {
             }
             .disabled(!store.isDirty || store.isBusy)
 
-            Button("Save") {
+            Button("Save & Deploy") {
                 Task { await store.save() }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(!store.isDirty || store.isBusy)
+            .disabled(!store.isDirty || store.isBusy || !store.canReachDevice)
+            .help("Write these settings to the configuration and push them to the device.")
         }
         .padding(.vertical, 4)
     }

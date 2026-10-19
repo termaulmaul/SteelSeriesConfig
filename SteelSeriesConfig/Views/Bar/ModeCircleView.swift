@@ -29,7 +29,7 @@ struct ModeCircleView<Content: View>: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(width: 70)
+            .frame(width: 66)
         }
         .buttonStyle(.plain)
         .disabled(isActive)

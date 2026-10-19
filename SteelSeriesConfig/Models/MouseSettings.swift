@@ -160,6 +160,11 @@ struct MouseSettings: Equatable, Sendable {
 
     static let pollingRateOptions = [1000, 500, 250, 125]
 
+    /// One-tap CPI presets offered in the menu bar, mirroring the reference app's mode
+    /// circles. All four sit exactly on the 50-CPI grid, so they survive the trip into
+    /// engine units without rounding.
+    static let cpiPresets = [1000, 2000, 5000, 6000]
+
     /// Snap to the 50-CPI grid inside the client's allowed range, rounding to the
     /// nearest step so that typing 1234 lands on 1250 rather than being quietly
     /// rounded down to 1200.
@@ -320,5 +325,33 @@ struct MouseSettings: Equatable, Sendable {
     /// Serialise for `PUT`. Throws if the document would not round-trip as an object.
     func encodedString() throws -> String {
         try AnyJSONValue.object(json).compactString()
+    }
+
+    /// Serialise for `POST configuration/liveDeploy`.
+    ///
+    /// The GG client deletes every top-level key whose document carries a truthy
+    /// `no_live_deploy` before live-deploying, and this does the same. For a mouse that
+    /// key is `button_mappings`, and live-applying a button map is how a button gets
+    /// rebound with no confirmation — precisely the write this app refuses to make.
+    func encodedStringForLiveDeploy() throws -> String {
+        let deployable = json.filter { _, value in
+            value.objectValue?["no_live_deploy"]?.boolValue != true
+        }
+        return try AnyJSONValue.object(deployable).compactString()
+    }
+
+    /// Top-level keys a live deploy would drop — the ones carrying a truthy
+    /// `no_live_deploy`.
+    ///
+    /// Exposed so a live deploy can verify afterwards that the engine *merged* the
+    /// partial document rather than replacing the stored revision with it. If it
+    /// replaced, those keys are gone from the engine's copy and have to be put back.
+    static func livePreviewExcludedKeys(in raw: String) -> [String] {
+        guard let object = (try? AnyJSONValue.parse(raw))?.objectValue else { return [] }
+        return object
+            .compactMap { key, value in
+                value.objectValue?["no_live_deploy"]?.boolValue == true ? key : nil
+            }
+            .sorted()
     }
 }

@@ -44,17 +44,27 @@ final class StatusBarController: NSObject {
     }
 
     /// Re-arm an observation chain whenever relevant store state changes, so the
-    /// menu bar symbol follows connection state without polling.
+    /// menu bar symbol follows connection state without polling, and so the panel
+    /// re-anchors when its own height changes underneath the user.
     private func observeStore() {
         withObservationTracking {
             _ = store.phase
             _ = store.devices.map { $0.connected.value }
             _ = store.selectedDeviceID
+            _ = store.canReachDevice
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
-                self.updateStatusImage()
+                // Re-arm first: this must be registered before the *next* mutation or a
+                // change landing during the await below is never observed.
                 self.observeStore()
+                self.updateStatusImage()
+
+                guard self.panel.isVisible else { return }
+                // Give SwiftUI a turn to lay the new content out before measuring it —
+                // the previous pass would size the panel from the outgoing layout.
+                try? await Task.sleep(for: .milliseconds(60))
+                if self.panel.isVisible { self.updatePanelFrame() }
             }
         }
     }
@@ -78,6 +88,10 @@ final class StatusBarController: NSObject {
 
     func showPopover() {
         guard statusItem?.button != nil else { return }
+        // Tell the store first: it kicks off an immediate status poll so the panel opens
+        // on fresh connection/battery/sync facts rather than whatever the background
+        // loop last read, and it raises the poll cadence for as long as we are visible.
+        store.panelVisibilityChanged(true)
         updatePanelFrame()
         guard !panel.isVisible else { return }
         panel.makeKeyAndOrderFront(nil)
@@ -85,6 +99,7 @@ final class StatusBarController: NSObject {
 
     func closePopover() {
         panel.orderOut(nil)
+        store.panelVisibilityChanged(false)
     }
 
     @objc

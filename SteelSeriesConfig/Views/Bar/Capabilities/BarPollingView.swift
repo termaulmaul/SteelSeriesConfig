@@ -11,7 +11,9 @@ struct BarPollingView: View {
     var body: some View {
         BarSectionView(title: "Polling Rate", value: valueText) {
             if let settings {
-                HStack(alignment: .top, spacing: 8) {
+                // 4 × 66 + 3 × 4 = 276, inside the 280pt column BarView leaves for a
+                // section. Wider spacing clipped the last circle against the edge.
+                HStack(alignment: .top, spacing: 4) {
                     ForEach(MouseSettings.pollingRateOptions, id: \.self) { hz in
                         ModeCircleView(
                             name: hzLabel(hz),
@@ -25,7 +27,7 @@ struct BarPollingView: View {
                         }
                     }
                 }
-                .disabled(store.isBusy)
+                .disabled(store.isBusy || !store.canReachDevice)
             } else {
                 Text("Not available for this device.")
                     .font(.caption)

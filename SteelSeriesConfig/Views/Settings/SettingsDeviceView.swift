@@ -4,8 +4,9 @@ import SwiftUI
 ///
 /// Grouped `Form` rather than a custom layout: on macOS this is what gives you the
 /// native section chrome, correct focus order, and controls that resize with the
-/// window. Everything here writes through `ConfigurationStore.mutate`, so nothing
-/// touches the device until Save.
+/// window. Everything here writes through `ConfigurationStore.mutate`, which pushes the
+/// change to the device as a live apply and leaves the draft dirty until Save
+/// persists and deploys it for real.
 struct SettingsDeviceView: View {
 
     @Environment(ConfigurationStore.self) private var store

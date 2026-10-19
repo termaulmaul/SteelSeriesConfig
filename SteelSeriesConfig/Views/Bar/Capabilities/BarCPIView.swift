@@ -25,10 +25,23 @@ struct BarCPIView: View {
                                 }
                             }
                         }
+                        .disabled(store.isBusy || !store.canReachDevice)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Presets")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+
+                        HStack(spacing: 6) {
+                            ForEach(MouseSettings.cpiPresets, id: \.self) { cpi in
+                                presetButton(cpi)
+                            }
+                        }
                     }
 
                     Slider(value: activeCPIBinding, in: Double(MouseSettings.cpiMinimum)...Double(MouseSettings.cpiMaximum), step: Double(MouseSettings.cpiScale))
-                        .disabled(store.isBusy)
+                        .disabled(store.isBusy || !store.canReachDevice)
 
                     HStack {
                         Text("\(MouseSettings.cpiMinimum)")
@@ -55,6 +68,37 @@ struct BarCPIView: View {
 
     private var unavailableText: String {
         store.draft == nil ? "No configuration loaded." : "This device's CPI schema is not modelled yet."
+    }
+
+    /// One-tap shortcut that overwrites the *active* ladder step with the preset value.
+    ///
+    /// Deliberately not a shortcut that rebuilds the ladder: the ladder belongs to the
+    /// device's own profile, and a button that silently reshaped five stored steps
+    /// would undo tuning the user did not ask to touch. Nothing is written either —
+    /// the mutation goes through `mutate`, which live-applies and leaves the draft
+    /// dirty until `save()`.
+    private func presetButton(_ cpi: Int) -> some View {
+        let isCurrent = settings?.activeCPI == cpi
+
+        return Button {
+            store.mutate { $0.setActiveCPIValue(cpi) }
+        } label: {
+            Text("\(cpi)")
+                .font(.caption2.weight(.semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isCurrent ? Color.accentColor : Color.secondary.opacity(0.18))
+                )
+                .foregroundColor(isCurrent ? .white : .primary)
+        }
+        .buttonStyle(.plain)
+        .disabled(store.isBusy || !store.canReachDevice)
+        .help("Set the active CPI step to \(cpi) and apply it to the mouse.")
     }
 
     private var activeCPIBinding: Binding<Double> {

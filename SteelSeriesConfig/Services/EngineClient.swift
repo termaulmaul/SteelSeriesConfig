@@ -155,6 +155,42 @@ actor EngineClient {
         return try await send("GET", url, body: nil)
     }
 
+    // MARK: - Device commands
+
+    /// Run a read command against a device.
+    ///
+    /// The engine reaches device I/O through a single POST endpoint that takes the
+    /// command as a *stringified* JSON document — the GG client gets there via its
+    /// `submit` mapping. Only read commands are issued from here; the protocol's
+    /// `writeCommand` / `writeCommandWithLightingPause` siblings are deliberately not
+    /// implemented, because every write this app performs goes through
+    /// `putConfiguration` or `liveDeploy`, where the safety policy applies.
+    ///
+    /// A `command_data` of `""` means the device did not answer — off, asleep, or out
+    /// of range. That is returned as `.null`, not thrown, so callers can render
+    /// "unknown" instead of treating a sleeping mouse as a failure.
+    func deviceCommand(id: Int, command: [String: AnyJSONValue]) async throws -> AnyJSONValue {
+        let commandDocument = try AnyJSONValue.object(command).compactString()
+        let payload: [String: AnyJSONValue] = [
+            "id": .int(id),
+            "command": .string(commandDocument),
+        ]
+        let body = try JSONSerialization.data(
+            withJSONObject: AnyJSONValue.object(payload).toJSONObject()
+        )
+        let data = try await perform("POST", "device/command", body: body)
+
+        let envelope: DeviceCommandResponse
+        do {
+            envelope = try JSONDecoder().decode(DeviceCommandResponse.self, from: data)
+        } catch {
+            throw ClientError.malformedResponse(String(describing: error))
+        }
+
+        guard let raw = envelope.commandData, !raw.isEmpty else { return .null }
+        return (try? AnyJSONValue.parse(raw)) ?? .null
+    }
+
     // MARK: - Writes
 
     /// The single mutation this app performs: full replace of one configuration.
@@ -178,7 +214,47 @@ actor EngineClient {
         _ = try await perform("POST", "configuration/\(configurationID)/deploy", body: body)
     }
 
+    /// Apply a settings document to the device *without* committing a configuration
+    /// revision. POST, matching the GG client's `submit` mapping.
+    ///
+    /// This is the endpoint the GG client fires while a slider is being dragged: the
+    /// document reaches the hardware immediately, which is what makes a change visible
+    /// on the mouse before anything is saved. It is not a substitute for
+    /// `putConfiguration` — a live-applied change is not persisted as a revision, so
+    /// `save()` still has to run for the change to survive a reconnect or a profile
+    /// switch.
+    ///
+    /// Callers must have validated the document with `WriteSafetyPolicy` and produced
+    /// it through ``MouseSettings/encodedStringForLiveDeploy()``, which drops the keys
+    /// the engine refuses to live-apply.
+    func liveDeploy(_ configuration: DeviceConfiguration, settings: String) async throws {
+        var payload: [String: AnyJSONValue] = [
+            "name": .string(configuration.name),
+            "id": .string(configuration.id),
+            "settings": .string(settings),
+            "universal_triggers": configuration.universalTriggers,
+        ]
+        if let deviceId = configuration.deviceId {
+            payload["device_id"] = .int(deviceId)
+        }
+
+        let body = try JSONSerialization.data(
+            withJSONObject: AnyJSONValue.object(payload).toJSONObject()
+        )
+        _ = try await perform("POST", "configuration/liveDeploy", body: body)
+    }
+
     func invalidate() {
         session.invalidateAndCancel()
+    }
+}
+
+/// `POST device/command` replies with the device's own JSON as a *string* inside an
+/// envelope, which is then re-parsed by the caller.
+private struct DeviceCommandResponse: Decodable {
+    let commandData: String?
+
+    enum CodingKeys: String, CodingKey {
+        case commandData = "command_data"
     }
 }
