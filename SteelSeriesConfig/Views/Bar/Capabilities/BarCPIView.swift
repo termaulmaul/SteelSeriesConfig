@@ -40,7 +40,11 @@ struct BarCPIView: View {
                         }
                     }
 
+                    // The knob is drawn 20pt tall inside a 16pt frame, so it spills 2pt past
+                    // the slider on each side and eats into the gaps the stack hands it. Pad
+                    // the overhang back, or the knob crowds the labels and reads as touching.
                     Slider(value: activeCPIBinding, in: Double(MouseSettings.cpiMinimum)...Double(MouseSettings.cpiMaximum), step: Double(MouseSettings.cpiScale))
+                        .padding(.vertical, BarMetrics.knobOverhang)
                         .disabled(store.isBusy || !store.canReachDevice)
 
                     HStack {
@@ -51,6 +55,7 @@ struct BarCPIView: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
                     .monospacedDigit()
+                    .padding(.top, BarMetrics.xs)
                 }
             } else {
                 Text(unavailableText)
