@@ -121,7 +121,10 @@ struct BarView: View {
 
     /// Full-bleed hairline. Inset by the panel padding it would read as a broken
     /// rectangle; edge to edge it reads as the panel's own seam, which is what it is.
+    /// The vertical inset keeps it off the label directly above (the CPI range text)
+    /// so the hairline reads as a seam and not as a stray mark.
     private var sectionDivider: some View {
         Divider()
+            .padding(.vertical, BarMetrics.xs)
     }
 }
