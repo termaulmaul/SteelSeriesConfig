@@ -17,9 +17,9 @@ struct BarActionsView: View {
     private var canWrite: Bool { store.canReachDevice && !store.isBusy }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: BarMetrics.s) {
             if let message = store.statusMessage {
-                HStack(spacing: 6) {
+                HStack(spacing: BarMetrics.xs) {
                     if store.isBusy || store.isLiveApplying {
                         ProgressView()
                             .controlSize(.small)
@@ -46,7 +46,7 @@ struct BarActionsView: View {
                 }
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: BarMetrics.s) {
                 Button {
                     Task { await store.save() }
                 } label: {

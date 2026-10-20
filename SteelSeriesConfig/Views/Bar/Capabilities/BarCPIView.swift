@@ -13,9 +13,9 @@ struct BarCPIView: View {
     var body: some View {
         BarSectionView(title: "CPI", value: valueText) {
             if let settings {
-                VStack(spacing: 10) {
+                VStack(spacing: BarMetrics.m) {
                     if settings.cpiLevelCount > 1 {
-                        HStack(spacing: 6) {
+                        HStack(spacing: BarMetrics.xs) {
                             ForEach(0..<settings.cpiLevelCount, id: \.self) { index in
                                 ModeBarView(
                                     name: "\(settings.cpiLevels[index])",
@@ -28,12 +28,12 @@ struct BarCPIView: View {
                         .disabled(store.isBusy || !store.canReachDevice)
                     }
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: BarMetrics.xxs) {
                         Text("Presets")
                             .font(.caption2)
                             .foregroundColor(.secondary)
 
-                        HStack(spacing: 6) {
+                        HStack(spacing: BarMetrics.xs) {
                             ForEach(MouseSettings.cpiPresets, id: \.self) { cpi in
                                 presetButton(cpi)
                             }
@@ -89,9 +89,9 @@ struct BarCPIView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
+                .padding(.vertical, BarMetrics.xxs)
                 .background(
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: BarMetrics.xs)
                         .fill(isCurrent ? Color.accentColor : Color.secondary.opacity(0.18))
                 )
                 .foregroundColor(isCurrent ? .white : .primary)

@@ -12,14 +12,14 @@ struct BarHeaderView: View {
     @Environment(ConfigurationStore.self) private var store
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: BarMetrics.m) {
             DeviceGlyph(
                 imageName: store.selectedDevice?.imageUrl,
                 systemImage: "computermouse",
-                height: 26
+                height: 30
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: BarMetrics.xxs) {
                 Text(store.selectedDevice?.localizedName ?? "SteelSeries")
                     .font(.headline)
                     .foregroundColor(.primary)
@@ -27,7 +27,7 @@ struct BarHeaderView: View {
                     .minimumScaleFactor(0.7)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                HStack(spacing: 4) {
+                HStack(spacing: BarMetrics.xs) {
                     ConnectionDotView(phase: store.displayPhase)
 
                     Text(statusLine)
@@ -50,7 +50,6 @@ struct BarHeaderView: View {
 
             BarSettingsButton()
         }
-        .padding(.horizontal, 4)
     }
 
     private var statusLine: String {

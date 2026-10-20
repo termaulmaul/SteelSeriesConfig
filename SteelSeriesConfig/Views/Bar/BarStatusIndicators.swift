@@ -56,7 +56,7 @@ struct BatteryBadgeView: View {
     let status: BatteryStatus
 
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: BarMetrics.xxs) {
             Image(systemName: symbolName)
                 .font(.system(size: 9, weight: .semibold))
                 .symbolEffect(.pulse, options: .repeating, isActive: status.isLow)
@@ -104,12 +104,12 @@ struct DisconnectedNoticeView: View {
     let phase: LinkPhase
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: BarMetrics.s) {
             Image(systemName: phase == .wiredIdle ? "power" : "bolt.horizontal.circle")
                 .font(.system(size: 13))
                 .foregroundColor(.orange)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: BarMetrics.xxs) {
                 Text(phase.label)
                     .font(.caption.weight(.semibold))
 

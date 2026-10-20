@@ -6,7 +6,7 @@ struct NoDeviceView: View {
     @Environment(ConfigurationStore.self) private var store
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: BarMetrics.s) {
             Image(systemName: "computermouse")
                 .font(.system(size: 34))
                 .foregroundColor(.secondary)
@@ -26,7 +26,7 @@ struct NoDeviceView: View {
             .disabled(store.isBusy)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.vertical, BarMetrics.s)
     }
 }
 
@@ -39,7 +39,7 @@ struct EngineUnavailableView: View {
     @Environment(ConfigurationStore.self) private var store
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: BarMetrics.s) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 30))
                 .foregroundColor(.orange)
@@ -52,7 +52,7 @@ struct EngineUnavailableView: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
 
-            HStack(spacing: 8) {
+            HStack(spacing: BarMetrics.s) {
 
                 Button("Retry") {
                     Task { await store.bootstrap() }
@@ -62,20 +62,20 @@ struct EngineUnavailableView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.vertical, BarMetrics.s)
     }
 }
 
 /// Shown while discovery is in flight so the panel never flashes an empty state.
 struct BarLoadingView: View {
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: BarMetrics.m) {
             ProgressView()
             Text("Looking for your SteelSeries devices…")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
+        .padding(.vertical, BarMetrics.xl)
     }
 }

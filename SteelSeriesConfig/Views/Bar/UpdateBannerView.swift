@@ -8,7 +8,7 @@ struct UpdateBannerView: View {
     private let updates = UpdateChecker.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: BarMetrics.s) {
             if let build = updates.readyBuild {
                 Label("Update available (build \(build))", systemImage: "arrow.down.circle.fill")
                     .font(.callout)

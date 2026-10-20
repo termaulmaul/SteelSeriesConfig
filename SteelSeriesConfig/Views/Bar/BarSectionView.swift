@@ -14,7 +14,7 @@ struct BarSectionView<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: BarMetrics.s) {
             HStack {
                 Text(title)
                     .font(.headline)
@@ -34,6 +34,5 @@ struct BarSectionView<Content: View>: View {
 
             content
         }
-        .padding(.horizontal, 4)
     }
 }

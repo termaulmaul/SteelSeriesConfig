@@ -43,7 +43,7 @@ struct HoverButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .padding(4)
+            .padding(BarMetrics.xxs)
             .background(Circle().fill(backgroundColor(configuration: configuration)))
             .onHover { hovering in
                 isHovering = hovering

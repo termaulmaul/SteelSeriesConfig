@@ -1,5 +1,22 @@
 import SwiftUI
 
+/// Spacing for the popover, on a Fibonacci scale: each step is the previous one × φ
+/// (1.618), so every gap is in golden ratio with its neighbour. Use only these.
+enum BarMetrics {
+    static let phi: CGFloat = 1.618
+
+    static let xxs: CGFloat = 3
+    static let xs: CGFloat = 5
+    static let s: CGFloat = 8
+    static let m: CGFloat = 13
+    static let l: CGFloat = 21
+    static let xl: CGFloat = 34
+
+    static let width: CGFloat = 320
+    /// Content column inside the panel padding.
+    static let column: CGFloat = width - 2 * l
+}
+
 /// Content of the menu bar popover.
 ///
 /// Layout mirrors the reference app: a fixed 320pt column, a header, then Dividers
@@ -24,7 +41,8 @@ struct BarView: View {
             if updates.readyBuild != nil {
                 Divider()
                 UpdateBannerView()
-                    .padding(16)
+                    .padding(.horizontal, BarMetrics.l)
+                    .padding(.vertical, BarMetrics.m)
             }
         }
     }
@@ -34,54 +52,71 @@ struct BarView: View {
             switch store.phase {
             case .booting:
                 BarLoadingView()
-                    .padding(16)
+                    .padding(BarMetrics.l)
 
             case .unavailable(let message):
-                VStack(spacing: 16) {
+                VStack(spacing: BarMetrics.m) {
                     EngineUnavailableView(message: message)
                 }
-                .padding(16)
+                .padding(BarMetrics.l)
 
             case .ready:
                 if store.selectedDevice == nil {
                     NoDeviceView()
-                        .padding(16)
+                        .padding(BarMetrics.l)
                 } else {
                     connectedLayout
                 }
             }
         }
-        .frame(width: 320)
+        .frame(width: BarMetrics.width)
     }
 
     private var connectedLayout: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 0) {
             BarHeaderView()
+                .padding(.horizontal, BarMetrics.l)
+                .padding(.top, BarMetrics.l)
+                .padding(.bottom, BarMetrics.m)
 
             if store.canReachDevice {
                 if store.mouseSettings == nil {
                     ReadOnlyNoticeView()
+                        .padding(.horizontal, BarMetrics.l)
                 } else {
-                    Divider()
+                    sectionDivider
                     BarCPIView()
-                    Divider()
+                        .padding(.vertical, BarMetrics.m)
+                        .padding(.horizontal, BarMetrics.l)
+                    sectionDivider
                     BarPollingView()
+                        .padding(.vertical, BarMetrics.m)
+                        .padding(.horizontal, BarMetrics.l)
                 }
             } else {
                 DisconnectedNoticeView(phase: store.displayPhase)
+                    .padding(.horizontal, BarMetrics.l)
             }
 
             // A save that failed just as the device dropped is the one case worth
             // keeping on screen while the controls are gone.
             if store.canReachDevice || store.statusMessage != nil {
-                Divider()
+                sectionDivider
                 BarActionsView()
+                    .padding(BarMetrics.m)
+                    .padding(.horizontal, BarMetrics.s)
             }
         }
-        .padding(16)
+        .padding(.bottom, BarMetrics.l)
         // Animate only the width/height consequence of the collapse; the header itself
         // stays put so the panel never appears to jump.
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: store.canReachDevice)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: store.mouseSettings != nil)
+    }
+
+    /// Full-bleed hairline. Inset by the panel padding it would read as a broken
+    /// rectangle; edge to edge it reads as the panel's own seam, which is what it is.
+    private var sectionDivider: some View {
+        Divider()
     }
 }

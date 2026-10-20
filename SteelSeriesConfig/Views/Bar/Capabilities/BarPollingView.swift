@@ -13,7 +13,7 @@ struct BarPollingView: View {
             if let settings {
                 // 4 × 66 + 3 × 4 = 276, inside the 280pt column BarView leaves for a
                 // section. Wider spacing clipped the last circle against the edge.
-                HStack(alignment: .top, spacing: 4) {
+                HStack(alignment: .top, spacing: BarMetrics.xxs) {
                     ForEach(MouseSettings.pollingRateOptions, id: \.self) { hz in
                         ModeCircleView(
                             name: hzLabel(hz),

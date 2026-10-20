@@ -12,7 +12,7 @@ struct ModeCircleView<Content: View>: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 4) {
+            VStack(spacing: BarMetrics.xxs) {
                 ZStack {
                     Circle()
                         .fill(isActive ? Color.accentColor : Color.secondary.opacity(0.35))
@@ -45,7 +45,7 @@ struct ModeBarView: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 4) {
+            VStack(spacing: BarMetrics.xxs) {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(isActive ? Color.accentColor : Color.secondary.opacity(0.4))
                     .frame(height: 6)
