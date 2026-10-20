@@ -102,6 +102,30 @@ final class AeroxProtocolTests: XCTestCase {
         XCTAssertNil(AeroxProtocol.battery(response: []), "No answer: mouse off or out of range.")
     }
 
+    /// A Bluetooth mouse answers `0x92` with its firmware-version reply rather than a
+    /// battery reading — `04 92 95 "10.6"` with the report id stripped to
+    /// `92 95 31 30 2E 36`. Decoded as battery that is "100 %, charging", which is the
+    /// phantom charge state the badge used to show on a wireless but idle mouse. The
+    /// payload must be rejected so the caller falls back to the level-only host reading.
+    func testFirmwareReplyIsNotMistakenForBattery() {
+        let firmware: [UInt8] = [0x92, 0x95, 0x31, 0x30, 0x2E, 0x36]
+        XCTAssertNil(AeroxProtocol.battery(response: firmware), "Firmware string is not a reading.")
+
+        // Padded out to a full report, exactly as it arrives off the device.
+        var padded = firmware
+        padded += [UInt8](repeating: 0, count: 58)
+        XCTAssertNil(AeroxProtocol.battery(response: padded))
+    }
+
+    /// A genuine reading pads the report with zeros and must still decode.
+    func testZeroPaddingIsNotMistakenForAFirmwareString() {
+        var reading: [UInt8] = [0x92, 0x0B]
+        reading += [UInt8](repeating: 0, count: 62)
+        let status = AeroxProtocol.battery(response: reading)
+        XCTAssertEqual(status?.percent, 50)
+        XCTAssertEqual(status?.isCharging, false)
+    }
+
     func testModelsCoverWiredAndReceiver() {
         XCTAssertEqual(AeroxProtocol.model(vendorID: 0x1038, productID: 0x183A)?.transport, .usb)
         XCTAssertEqual(AeroxProtocol.model(vendorID: 0x1038, productID: 0x1838)?.isWireless, true)

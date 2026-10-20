@@ -47,6 +47,12 @@ final class ConfigurationStore {
     private(set) var linkPhase: LinkPhase = .unknown
     private(set) var batteryStatus: BatteryStatus?
 
+    /// The status as of the previous poll, so a transition can be told from a steady
+    /// state. `nil` until the first poll completes — that gap is what stops launch from
+    /// announcing a connection the user did not make.
+    private var lastAnnouncedPhase: LinkPhase?
+    private var lastAnnouncedBattery: BatteryStatus?
+
     var isBusy = false
     /// True when the local edits diverge from the saved profile.
     var isDirty = false
@@ -281,6 +287,7 @@ final class ConfigurationStore {
             batteryStatus = nil
             attachedProductID = nil
             sentCommands = nil
+            announceTransition(phase: .unknown)
             return
         }
 
@@ -303,6 +310,8 @@ final class ConfigurationStore {
         }
         batteryStatus = battery
 
+        announceTransition(phase: displayPhase)
+
         // A mouse that just appeared (or woke up) gets the profile, so it always runs
         // what the app shows.
         if !talking {
@@ -324,11 +333,73 @@ final class ConfigurationStore {
             return cache.status
         }
         let readings = (await HostBatteryReader.rawJSON()).map(HostBatteryReader.parse) ?? []
+        // macOS reports a Bluetooth peripheral's level and nothing else — no charging
+        // flag, no "on the cable" signal. So neither charge state can be inferred here:
+        // a full reading is just a full reading, not a completed charge. Guessing
+        // "charged" from `percent >= 100` is what made a mouse sitting idle at 100 %
+        // show a charging bolt.
         let status = HostBatteryReader.mouse(in: readings, preferringName: "Aerox 3").map {
-            BatteryStatus(percent: $0.percent, isCharging: false, isCharged: $0.percent >= 100)
+            BatteryStatus(percent: $0.percent, isCharging: false, isCharged: false)
         }
         hostBatteryCache = (status, Date())
         return status
+    }
+
+    // MARK: - Notifications
+
+    /// Compare this poll against the previous one and raise a notification if the
+    /// transition warrants it. Decisions live in ``DeviceNotificationPolicy``; this only
+    /// turns the verdict into a message and hands it to the notification centre.
+    ///
+    /// Runs on every poll, including the very first (`lastAnnounced*` are `nil`), where
+    /// the policy suppresses a "connected" it did not see happen but still allows an
+    /// already-low battery to be reported.
+    private func announceTransition(phase: LinkPhase) {
+        let previousPhase = lastAnnouncedPhase
+        let previousBattery = lastAnnouncedBattery
+        lastAnnouncedPhase = phase
+        lastAnnouncedBattery = batteryStatus
+
+        // Nothing to say while the device list is empty: that is the app's own start-up
+        // state, not a disconnection the user caused.
+        guard let device = selectedDevice else { return }
+        guard let kind = DeviceNotificationPolicy.event(
+            previousPhase: previousPhase,
+            phase: phase,
+            previousBattery: previousBattery,
+            battery: batteryStatus
+        ) else { return }
+
+        let preferences = AppPreferences.shared
+        if kind == .connected || kind == .disconnected {
+            guard preferences.notifyOnConnect else { return }
+        } else {
+            guard preferences.notifyOnBattery else { return }
+        }
+
+        DeviceNotificationCenter.shared.show(
+            DeviceNotification(
+                kind: kind,
+                deviceName: device.localizedName,
+                imageName: device.imageUrl,
+                detail: detail(for: kind, phase: phase),
+                batteryProgress: batteryStatus.map { Double($0.percent) / 100 }
+            ),
+            style: preferences.notificationStyle
+        )
+    }
+
+    private func detail(for kind: DeviceNotification.Kind, phase: LinkPhase) -> String {
+        switch kind {
+        case .connected:
+            return phase.label
+        case .disconnected:
+            return phase.recoveryHint ?? phase.label
+        case .batteryLow:
+            return "Battery low · \(batteryStatus?.label ?? "—")"
+        case .batteryFull:
+            return "Fully charged"
+        }
     }
 
     // MARK: - Backups

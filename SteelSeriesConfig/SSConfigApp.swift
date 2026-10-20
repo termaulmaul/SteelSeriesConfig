@@ -22,6 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UpdateChecker.shared.start()
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        DeviceNotificationCenter.shared.dismissAll()
+    }
+
     func applicationShouldHandleReopen(
         _ sender: NSApplication,
         hasVisibleWindows: Bool

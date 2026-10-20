@@ -152,8 +152,20 @@ enum AeroxProtocol {
 
     /// Parse the answer to `batteryQuery`. `nil` means no usable reading — over the
     /// receiver that is a mouse that is off, asleep or out of range.
+    ///
+    /// A real answer is two bytes: the echoed command, then the packed level/charge byte,
+    /// with the rest of the report zeroed. A Bluetooth mouse does not implement the
+    /// battery query at all, but it *does* answer `0x92` with its firmware-version reply
+    /// — `[0x92, 0x95, "10.6", 0…]`, live-verified. Read as battery that reply decodes to
+    /// "100 %, charging", which is where the phantom charge state came from. So the
+    /// payload has to look like a reading: anything carrying a printable string after the
+    /// level byte is a different answer and is rejected.
     static func battery(response: [UInt8]) -> BatteryStatus? {
         guard response.count >= 2 else { return nil }
+
+        // Anything past the level byte must be padding. A firmware string is not.
+        if response.count > 2, response[2...].contains(where: { $0 != 0 }) { return nil }
+
         let raw = response[1]
         let level = (Int(raw & 0x7F) - 1) * 5
         guard (0...100).contains(level) else { return nil }

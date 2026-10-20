@@ -19,7 +19,7 @@ struct DeviceGlyph: View {
     let height: CGFloat
 
     var body: some View {
-        if let imageName, let image = NSImage(named: imageName) {
+        if let image = DeviceArtwork.image(named: imageName) {
             Image(nsImage: image)
                 .resizable()
                 .interpolation(.high)

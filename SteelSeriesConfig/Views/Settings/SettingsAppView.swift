@@ -6,6 +6,7 @@ struct SettingsAppView: View {
 
     @Environment(ConfigurationStore.self) private var store
     private let updates = UpdateChecker.shared
+    private let preferences = AppPreferences.shared
 
     var body: some View {
         Form {
@@ -58,6 +59,46 @@ struct SettingsAppView: View {
                 }
             }
 
+            Section("Notifications") {
+                SettingsRow(
+                    title: "Connected / disconnected",
+                    description: "A floating notification when the mouse links up or drops off."
+                ) {
+                    Toggle("", isOn: Bindable(preferences).notifyOnConnect)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+
+                SettingsRow(
+                    title: "Battery",
+                    description: "Warns at 20 %, 10 % and 5 %, and again when a charge completes."
+                ) {
+                    Toggle("", isOn: Bindable(preferences).notifyOnBattery)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+
+                SettingsRow(
+                    title: "Style",
+                    description: preferences.notificationStyle.summary
+                ) {
+                    Picker("", selection: Bindable(preferences).notificationStyle) {
+                        ForEach(NotificationStyle.allCases) { style in
+                            Text(style.title).tag(style)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                }
+
+                SettingsRow(
+                    title: "Preview",
+                    description: "Shows what the current style looks like."
+                ) {
+                    Button("Show") { showPreviewNotification() }
+                }
+            }
+
             Section("Updates") {
                 SettingsRow(
                     title: "Status",
@@ -103,6 +144,20 @@ struct SettingsAppView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func showPreviewNotification() {
+        let device = store.selectedDevice
+        DeviceNotificationCenter.shared.show(
+            DeviceNotification(
+                kind: .batteryLow,
+                deviceName: device?.localizedName ?? "Aerox 3 Wireless",
+                imageName: device?.imageUrl ?? "DeviceAerox3",
+                detail: "Battery low · 18%",
+                batteryProgress: 0.18
+            ),
+            style: preferences.notificationStyle
+        )
     }
 
     @ViewBuilder

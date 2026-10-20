@@ -57,33 +57,29 @@ struct BatteryBadgeView: View {
 
     var body: some View {
         HStack(spacing: BarMetrics.xxs) {
-            Image(systemName: symbolName)
+            Image(systemName: status.symbolName)
                 .font(.system(size: 9, weight: .semibold))
                 .symbolEffect(.pulse, options: .repeating, isActive: status.isLow)
 
             Text(status.label)
                 .font(.caption2)
                 .monospacedDigit()
+
+            if let state = status.stateLabel {
+                Text(state)
+                    .font(.caption2)
+            }
         }
         .foregroundColor(color)
-        .accessibilityLabel("Battery \(status.percent) percent\(chargingSuffix)")
+        .accessibilityLabel(accessibilityLabel)
     }
 
-    private var chargingSuffix: String {
-        if status.isCharged { return ", charged" }
-        if status.isCharging { return ", charging" }
-        return status.isLow ? ", low" : ""
-    }
-
-    private var symbolName: String {
-        if status.isCharging || status.isCharged { return "battery.100.bolt" }
-        switch status.percent {
-        case ..<13: return "battery.0"
-        case ..<38: return "battery.25"
-        case ..<63: return "battery.50"
-        case ..<88: return "battery.75"
-        default: return "battery.100"
-        }
+    private var accessibilityLabel: String {
+        var parts = ["Battery \(status.percent) percent"]
+        if status.isCharged { parts.append("charged") }
+        else if status.isCharging { parts.append("charging") }
+        else if status.isLow { parts.append("low") }
+        return parts.joined(separator: ", ")
     }
 
     private var color: Color {

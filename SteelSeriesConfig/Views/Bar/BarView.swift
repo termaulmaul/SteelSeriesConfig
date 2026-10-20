@@ -112,7 +112,7 @@ struct BarView: View {
                     .padding(.horizontal, BarMetrics.s)
             }
         }
-        .padding(.bottom, BarMetrics.l)
+        .padding(.bottom, BarMetrics.s)
         // Animate only the width/height consequence of the collapse; the header itself
         // stays put so the panel never appears to jump.
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: store.canReachDevice)

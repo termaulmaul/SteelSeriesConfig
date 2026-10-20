@@ -165,6 +165,32 @@ struct BatteryStatus: Equatable, Sendable {
 
     var label: String { "\(percent)%" }
 
+    /// Short word for the charge state, or `nil` when the battery is merely discharging
+    /// — the percentage already says that, and a permanent "Discharging" tag would be
+    /// noise on the line the connection status also lives on.
+    var stateLabel: String? {
+        if isCharged { return "Charged" }
+        if isCharging { return "Charging" }
+        if isLow { return "Low" }
+        return nil
+    }
+
+    /// Symbol for the charge state, matching the percentage where it can.
+    ///
+    /// The bolt variants are reserved for a cable being attached, because that is the
+    /// only thing they add over the plain battery symbol: that the number is rising.
+    var symbolName: String {
+        if isCharged { return "battery.100.bolt" }
+        if isCharging { return "battery.100.bolt" }
+        switch percent {
+        case ..<13: return "battery.0"
+        case ..<38: return "battery.25"
+        case ..<63: return "battery.50"
+        case ..<88: return "battery.75"
+        default: return "battery.100"
+        }
+    }
+
     /// Parse a `charge_status` command payload. Returns `nil` when the device did not
     /// report a level — treated as "unknown", never as "empty".
     init?(payload: AnyJSONValue) {
