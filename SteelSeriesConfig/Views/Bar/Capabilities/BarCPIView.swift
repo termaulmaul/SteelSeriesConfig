@@ -52,10 +52,10 @@ struct BarCPIView: View {
                         Spacer()
                         Text("\(MouseSettings.cpiMaximum)")
                     }
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundColor(.secondary)
                     .monospacedDigit()
-                    .padding(.top, BarMetrics.xs)
+                    .padding(.top, BarMetrics.s)
                 }
             } else {
                 Text(unavailableText)
