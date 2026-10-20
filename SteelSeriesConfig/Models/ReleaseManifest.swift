@@ -51,12 +51,23 @@ enum ReleaseManifest {
         return Int(tag.dropFirst(tagPrefix.count))
     }
 
-    static func dmgName(build: Int) -> String {
-        "SteelSeriesConfig-\(build).dmg"
+    /// `SteelSeriesConfig-<version>-build.<n>.dmg`. The marketing version rides along in
+    /// the file name so a downloaded image names itself; the build number stays the part
+    /// the updater keys on, so the name is matched by its suffix rather than rebuilt.
+    static func dmgName(version: String, build: Int) -> String {
+        "SteelSeriesConfig-\(version)-build.\(build).dmg"
     }
 
-    static func checksumName(build: Int) -> String {
-        dmgName(build: build) + ".sha256"
+    static func checksumName(forDmg dmgName: String) -> String {
+        dmgName + ".sha256"
+    }
+
+    /// Whether `name` is the DMG for `build`, whatever version it carries.
+    static func isDmg(_ name: String, forBuild build: Int) -> Bool {
+        let suffix = "-build.\(build).dmg"
+        return name.hasPrefix("SteelSeriesConfig-")
+            && name.hasSuffix(suffix)
+            && name.count > "SteelSeriesConfig-".count + suffix.count
     }
 
     /// The download for `release`, but only if it is a published, complete build
@@ -68,19 +79,21 @@ enum ReleaseManifest {
               build > installedBuild
         else { return nil }
 
-        let dmgFile = dmgName(build: build)
-        let checksumFile = checksumName(build: build)
-        guard let dmg = release.assets.first(where: { $0.name == dmgFile }),
-              let checksum = release.assets.first(where: { $0.name == checksumFile }),
+        let dmg = release.assets.first { isDmg($0.name, forBuild: build) }
+        let checksum = dmg.flatMap { image in
+            release.assets.first { $0.name == checksumName(forDmg: image.name) }
+        }
+        guard let dmg,
+              let checksum,
               isTrusted(dmg.browserDownloadURL),
               isTrusted(checksum.browserDownloadURL)
         else { return nil }
 
         return Offer(
             build: build,
-            dmgName: dmgFile,
+            dmgName: dmg.name,
             dmgURL: dmg.browserDownloadURL,
-            checksumName: checksumFile,
+            checksumName: checksum.name,
             checksumURL: checksum.browserDownloadURL
         )
     }

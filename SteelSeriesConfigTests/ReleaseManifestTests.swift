@@ -9,7 +9,7 @@ final class ReleaseManifestTests: XCTestCase {
         tag: String = "build-12",
         draft: Bool = false,
         prerelease: Bool = false,
-        assets: [String] = ["SteelSeriesConfig-12.dmg", "SteelSeriesConfig-12.dmg.sha256"]
+        assets: [String] = ["SteelSeriesConfig-0.1.0-build.12.dmg", "SteelSeriesConfig-0.1.0-build.12.dmg.sha256"]
     ) -> ReleaseManifest.Release {
         ReleaseManifest.Release(
             tagName: tag,
@@ -31,8 +31,8 @@ final class ReleaseManifestTests: XCTestCase {
         let offer = ReleaseManifest.offer(for: release(), installedBuild: 11)
 
         XCTAssertEqual(offer?.build, 12)
-        XCTAssertEqual(offer?.dmgName, "SteelSeriesConfig-12.dmg")
-        XCTAssertEqual(offer?.checksumName, "SteelSeriesConfig-12.dmg.sha256")
+        XCTAssertEqual(offer?.dmgName, "SteelSeriesConfig-0.1.0-build.12.dmg")
+        XCTAssertEqual(offer?.checksumName, "SteelSeriesConfig-0.1.0-build.12.dmg.sha256")
     }
 
     func testNoOfferForSameOrOlderBuild() {
@@ -46,8 +46,26 @@ final class ReleaseManifestTests: XCTestCase {
     }
 
     func testNoOfferWhenAssetIsMissing() {
-        XCTAssertNil(ReleaseManifest.offer(for: release(assets: ["SteelSeriesConfig-12.dmg"]), installedBuild: 1))
-        XCTAssertNil(ReleaseManifest.offer(for: release(assets: ["SteelSeriesConfig-12.dmg.sha256"]), installedBuild: 1))
+        XCTAssertNil(ReleaseManifest.offer(for: release(assets: ["SteelSeriesConfig-0.1.0-build.12.dmg"]), installedBuild: 1))
+        XCTAssertNil(ReleaseManifest.offer(for: release(assets: ["SteelSeriesConfig-0.1.0-build.12.dmg.sha256"]), installedBuild: 1))
+    }
+
+    /// The whole point of the suffix match: a newer version string in the name still
+    /// resolves for the build the tag names, and a different build never does.
+    func testOfferMatchesByBuildSuffixRegardlessOfVersion() {
+        let assets = ["SteelSeriesConfig-0.2.0-build.12.dmg", "SteelSeriesConfig-0.2.0-build.12.dmg.sha256"]
+        XCTAssertEqual(ReleaseManifest.offer(for: release(assets: assets), installedBuild: 11)?.build, 12)
+
+        let wrongBuild = ["SteelSeriesConfig-0.1.0-build.13.dmg", "SteelSeriesConfig-0.1.0-build.13.dmg.sha256"]
+        XCTAssertNil(ReleaseManifest.offer(for: release(assets: wrongBuild), installedBuild: 1))
+    }
+
+    func testDmgNameAndChecksumNameRoundTrip() {
+        let dmg = ReleaseManifest.dmgName(version: "0.1.0", build: 4)
+        XCTAssertEqual(dmg, "SteelSeriesConfig-0.1.0-build.4.dmg")
+        XCTAssertTrue(ReleaseManifest.isDmg(dmg, forBuild: 4))
+        XCTAssertFalse(ReleaseManifest.isDmg(dmg, forBuild: 14))
+        XCTAssertEqual(ReleaseManifest.checksumName(forDmg: dmg), "SteelSeriesConfig-0.1.0-build.4.dmg.sha256")
     }
 
     func testNoOfferFromUntrustedHost() {
@@ -56,8 +74,8 @@ final class ReleaseManifestTests: XCTestCase {
             draft: false,
             prerelease: false,
             assets: [
-                .init(name: "SteelSeriesConfig-12.dmg", browserDownloadURL: URL(string: "https://example.com/a.dmg")!),
-                .init(name: "SteelSeriesConfig-12.dmg.sha256", browserDownloadURL: URL(string: "https://example.com/a.sha256")!),
+                .init(name: "SteelSeriesConfig-0.1.0-build.12.dmg", browserDownloadURL: URL(string: "https://example.com/a.dmg")!),
+                .init(name: "SteelSeriesConfig-0.1.0-build.12.dmg.sha256", browserDownloadURL: URL(string: "https://example.com/a.sha256")!),
             ]
         )
         XCTAssertNil(ReleaseManifest.offer(for: foreign, installedBuild: 1))
@@ -73,13 +91,13 @@ final class ReleaseManifestTests: XCTestCase {
 
     func testChecksumIsReadForNamedFile() {
         let text = """
-        ABC123  SteelSeriesConfig-11.dmg
-        def456 *SteelSeriesConfig-12.dmg
+        ABC123  SteelSeriesConfig-0.1.0-build.11.dmg
+        def456 *SteelSeriesConfig-0.1.0-build.12.dmg
         """
 
-        XCTAssertEqual(ReleaseManifest.checksum(fromFileText: text, fileName: "SteelSeriesConfig-12.dmg"), "def456")
-        XCTAssertEqual(ReleaseManifest.checksum(fromFileText: text, fileName: "SteelSeriesConfig-11.dmg"), "abc123")
-        XCTAssertNil(ReleaseManifest.checksum(fromFileText: text, fileName: "SteelSeriesConfig-13.dmg"))
+        XCTAssertEqual(ReleaseManifest.checksum(fromFileText: text, fileName: "SteelSeriesConfig-0.1.0-build.12.dmg"), "def456")
+        XCTAssertEqual(ReleaseManifest.checksum(fromFileText: text, fileName: "SteelSeriesConfig-0.1.0-build.11.dmg"), "abc123")
+        XCTAssertNil(ReleaseManifest.checksum(fromFileText: text, fileName: "SteelSeriesConfig-0.1.0-build.13.dmg"))
     }
 
     func testSha256MatchesKnownVector() {
@@ -103,7 +121,7 @@ final class ReleaseManifestTests: XCTestCase {
           "draft": false,
           "prerelease": false,
           "assets": [
-            {"name": "SteelSeriesConfig-12.dmg", "browser_download_url": "https://github.com/a/b/releases/download/build-12/SteelSeriesConfig-12.dmg"}
+            {"name": "SteelSeriesConfig-0.1.0-build.12.dmg", "browser_download_url": "https://github.com/a/b/releases/download/build-12/SteelSeriesConfig-0.1.0-build.12.dmg"}
           ]
         }
         """
@@ -111,6 +129,6 @@ final class ReleaseManifestTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ReleaseManifest.Release.self, from: Data(json.utf8))
 
         XCTAssertEqual(decoded.tagName, "build-12")
-        XCTAssertEqual(decoded.assets.first?.name, "SteelSeriesConfig-12.dmg")
+        XCTAssertEqual(decoded.assets.first?.name, "SteelSeriesConfig-0.1.0-build.12.dmg")
     }
 }
