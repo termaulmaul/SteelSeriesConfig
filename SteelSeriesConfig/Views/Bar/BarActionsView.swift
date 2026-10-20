@@ -1,16 +1,13 @@
 import SwiftUI
 
-/// Save / discard / deploy, plus whatever the store last reported.
+/// Save / discard / re-apply, plus whatever the store last reported.
 ///
-/// Save persists *and* deploys: a write that only reaches the engine leaves the mouse
-/// running its old profile, and from the user's side that is indistinguishable from the
-/// save having failed. The separate Deploy button is kept because it does something
-/// genuinely different — re-pushing what the engine already holds, which is how you
-/// recover after the mouse was switched to another profile.
+/// Save keeps the profile and commits it to the mouse's onboard memory. The separate
+/// Apply button re-sends the saved profile, which is how you recover after another
+/// tool reprogrammed the mouse.
 ///
-/// Deploy is a two-tap confirm rather than a sheet: this view lives inside a
-/// non-activating `NSPanel`, where presenting modal UI is unreliable, and an
-/// accidental deploy rewrites the mouse's live profile.
+/// Apply is a two-tap confirm rather than a sheet: this view lives inside a
+/// non-activating `NSPanel`, where presenting modal UI is unreliable.
 struct BarActionsView: View {
 
     @Environment(ConfigurationStore.self) private var store
@@ -53,13 +50,13 @@ struct BarActionsView: View {
                 Button {
                     Task { await store.save() }
                 } label: {
-                    Text(store.isDirty ? "Save & Deploy" : "Saved")
+                    Text(store.isDirty ? "Save" : "Saved")
                         .frame(maxWidth: .infinity)
                 }
                 .controlSize(.large)
                 .buttonStyle(.borderedProminent)
-                .disabled(!store.isDirty || !canWrite)
-                .help("Write these settings to the configuration and push them to the device.")
+                .disabled(!store.isDirty || store.isBusy)
+                .help("Save the profile and write it to the mouse's onboard memory.")
 
                 Button {
                     store.reloadDraft()
@@ -78,12 +75,12 @@ struct BarActionsView: View {
                         armDeploy()
                     }
                 } label: {
-                    Text(isDeployArmed ? "Confirm" : "Deploy")
+                    Text(isDeployArmed ? "Confirm" : "Apply")
                 }
                 .controlSize(.large)
                 .buttonStyle(.bordered)
                 .disabled(!canWrite || store.draft == nil)
-                .help(isDeployArmed ? "Tap again to push this configuration to the device." : "Push the saved configuration to the device.")
+                .help(isDeployArmed ? "Tap again to re-send the saved profile to the mouse." : "Re-send the saved profile to the mouse.")
             }
         }
     }

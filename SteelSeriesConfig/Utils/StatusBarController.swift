@@ -25,8 +25,15 @@ final class StatusBarController: NSObject {
     nonisolated(unsafe) private var globalEventMonitor: Any?
 
     private static let panelWidth: CGFloat = 320
-    private static let symbolConnected = "computermouse"
-    private static let symbolDisconnected = "computermouse.slash"
+    /// SteelSeries GG's own menu bar glyph (`taskbar.tiff`), shipped as
+    /// `StatusBarIcon.png` / `@2x`. Template, so it follows the menu bar's appearance.
+    private static let statusIcon: NSImage? = {
+        let image = NSImage(named: "StatusBarIcon")
+        image?.size = NSSize(width: 16, height: 16)
+        image?.isTemplate = true
+        image?.accessibilityDescription = "SteelSeries Config"
+        return image
+    }()
 
     var isInserted: Bool { statusItem != nil }
 
@@ -199,15 +206,9 @@ final class StatusBarController: NSObject {
     private func updateStatusImage() {
         guard let button = statusItem?.button else { return }
 
-        let connected = store.devices.contains { $0.connected.value }
-        let symbol = connected ? Self.symbolConnected : Self.symbolDisconnected
-
-        let image = NSImage(
-            systemSymbolName: symbol,
-            accessibilityDescription: "SteelSeries devices"
-        )
-        image?.isTemplate = true
-        button.image = image
+        // Always drawn solid, like GG's own menu extra; connection state is shown in
+        // the popover instead.
+        button.image = Self.statusIcon
     }
 }
 

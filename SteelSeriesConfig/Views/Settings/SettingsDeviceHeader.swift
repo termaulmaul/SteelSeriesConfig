@@ -8,9 +8,9 @@ struct SettingsDeviceHeader: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            EngineDeviceImage(
-                urlString: store.selectedDevice?.imageUrl,
-                fallbackSystemImage: "computermouse",
+            DeviceGlyph(
+                imageName: store.selectedDevice?.imageUrl,
+                systemImage: "computermouse",
                 height: 44
             )
 
@@ -38,29 +38,23 @@ struct SettingsDeviceHeader: View {
             }
             .disabled(!store.isDirty || store.isBusy)
 
-            Button("Save & Deploy") {
+            Button("Save") {
                 Task { await store.save() }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(!store.isDirty || store.isBusy || !store.canReachDevice)
-            .help("Write these settings to the configuration and push them to the device.")
+            .disabled(!store.isDirty || store.isBusy)
+            .help("Save the profile and write it to the mouse's onboard memory.")
         }
         .padding(.vertical, 4)
     }
 
     @ViewBuilder
     private var statusBadge: some View {
-        if let sync = store.syncStatus {
-            Label(
-                sync.isSynced.value ? "In sync with device" : "Saved, not deployed",
-                systemImage: sync.isSynced.value ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath"
-            )
-            .font(.caption)
-            .foregroundColor(sync.isSynced.value ? .green : .orange)
-        } else {
-            Label("Device status unknown", systemImage: "questionmark.circle")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
+        Label(
+            store.isDirty ? "Unsaved changes" : "Saved",
+            systemImage: store.isDirty ? "pencil.circle" : "checkmark.circle.fill"
+        )
+        .font(.caption)
+        .foregroundColor(store.isDirty ? .orange : .green)
     }
 }

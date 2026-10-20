@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Shown when no device is detected at all — the engine answered, the list is empty.
+/// Shown when no device is detected at all — nothing supported is on the HID bus.
 struct NoDeviceView: View {
 
     @Environment(ConfigurationStore.self) private var store
@@ -14,7 +14,7 @@ struct NoDeviceView: View {
             Text("No devices found")
                 .font(.headline)
 
-            Text("Plug in a SteelSeries peripheral, or turn it on if it is wireless.")
+            Text("Connect the mouse by cable, its 2.4 GHz receiver, or Bluetooth.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -30,8 +30,8 @@ struct NoDeviceView: View {
     }
 }
 
-/// Shown when the engine itself cannot be reached — a distinct state from "no
-/// device", because the remedy is different (start GG, or fix the install).
+/// Shown when the app cannot start talking to devices at all — a distinct state from
+/// "no device".
 struct EngineUnavailableView: View {
 
     let message: String
@@ -44,7 +44,7 @@ struct EngineUnavailableView: View {
                 .font(.system(size: 30))
                 .foregroundColor(.orange)
 
-            Text("Engine not reachable")
+            Text("Mouse not reachable")
                 .font(.headline)
 
             Text(message)
@@ -53,10 +53,6 @@ struct EngineUnavailableView: View {
                 .multilineTextAlignment(.center)
 
             HStack(spacing: 8) {
-                Button("Start SteelSeries GG") {
-                    store.launchEngine()
-                }
-                .controlSize(.small)
 
                 Button("Retry") {
                     Task { await store.bootstrap() }

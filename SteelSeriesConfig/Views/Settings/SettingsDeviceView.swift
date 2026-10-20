@@ -34,42 +34,18 @@ struct SettingsDeviceView: View {
                 pollingRow
             }
 
-            Section("Sensor") {
-                angleSnapRow
-                toggleRow(
-                    "Exact Aim",
-                    "Disables angle snapping while a mapped aim button is held.",
-                    keyPath: \.exactAim,
-                    setter: { $0.setExactAim($1) }
-                )
-                toggleRow(
-                    "Exact Acceleration",
-                    "Raw input with no acceleration compensation.",
-                    keyPath: \.exactAccel,
-                    setter: { $0.setExactAccel($1) }
-                )
-                toggleRow(
-                    "Low-Power Gaming Mode",
-                    "Keeps the sensor in its high-performance state while gaming.",
-                    keyPath: \.lowPowerGamingMode,
-                    setter: { $0.setLowPowerGamingMode($1) }
-                )
+            // Only settings the HID protocol can express are shown. Angle snapping,
+            // Exact Aim/Accel, Low-Power Gaming Mode, brightness and Smart Lighting
+            // have no known command, so they are hidden rather than faked.
+            Section("Power") {
                 powerSaveRow
             }
 
             Section("Illumination") {
-                brightnessRow
-                idleBrightnessRow
                 idleTimeoutRow
                 toggleRow(
-                    "Smart Lighting",
-                    "Dims the lighting when the sensor detects no movement.",
-                    keyPath: \.smartLighting,
-                    setter: { $0.setSmartLighting($1) }
-                )
-                toggleRow(
-                    "Default Lighting",
-                    "Applies the default effect when no per-application profile is active.",
+                    "Rainbow at Startup",
+                    "Runs the rainbow effect when the mouse powers up.",
                     keyPath: \.defaultLightingEnabled,
                     setter: { $0.setDefaultLightingEnabled($1) }
                 )
@@ -87,7 +63,7 @@ struct SettingsDeviceView: View {
                 } header: {
                     Text("Buttons")
                 } footer: {
-                    Text("Pick a different action for each button. This applies when you Save — the engine refuses to live-apply button maps, so a change never reaches the mouse until then.")
+                    Text("Pick a different action for each button. Changes reach the mouse immediately; Save keeps them across reconnects.")
                 }
             }
         }
@@ -118,7 +94,7 @@ struct SettingsDeviceView: View {
 
     private var unavailableReason: String {
         if store.phase == .booting {
-            return "Still looking for the SteelSeries engine."
+            return "Still looking for the mouse."
         }
         if store.draft == nil {
             return "No configuration was loaded for this device."
@@ -180,23 +156,6 @@ struct SettingsDeviceView: View {
         }
     }
 
-    private var angleSnapRow: some View {
-        SettingsRow(
-            title: "Angle Snapping",
-            description: "Straightens fast flicks. 0 is off; higher values straighten more aggressively. Off is usually better for aiming."
-        ) {
-            if let settings = store.mouseSettings {
-                NumericField(
-                    value: Binding(
-                        get: { settings.angleSnapLevel },
-                        set: { value in store.mutate { $0.setAngleSnapLevel(value) } }
-                    ),
-                    range: 0...10,
-                    step: 1
-                )
-            }
-        }
-    }
 
     private var pollingRow: some View {
         SettingsRow(
@@ -229,7 +188,7 @@ struct SettingsDeviceView: View {
                         get: { settings.powerSaveSeconds },
                         set: { value in store.mutate { $0.setPowerSaveSeconds(value) } }
                     ),
-                    range: 0...3600,
+                    range: 0...1200,
                     step: 30,
                     unit: "sec"
                 )
@@ -239,48 +198,10 @@ struct SettingsDeviceView: View {
 
     // MARK: - Illumination
 
-    private var brightnessRow: some View {
-        SettingsRow(
-            title: "Brightness",
-            description: "Overall lighting brightness while the mouse is in use, 0–15."
-        ) {
-            if let settings = store.mouseSettings {
-                NumericField(
-                    value: Binding(
-                        get: { settings.brightness },
-                        set: { value in store.mutate { $0.setBrightness(value) } }
-                    ),
-                    range: 0...15,
-                    step: 1,
-                    unit: "/ 15"
-                )
-            }
-        }
-    }
-
-    private var idleBrightnessRow: some View {
-        SettingsRow(
-            title: "Idle Brightness",
-            description: "Brightness used after the mouse stops moving, 0–15."
-        ) {
-            if let settings = store.mouseSettings {
-                NumericField(
-                    value: Binding(
-                        get: { settings.idleBrightness },
-                        set: { value in store.mutate { $0.setIdleBrightness(value) } }
-                    ),
-                    range: 0...15,
-                    step: 1,
-                    unit: "/ 15"
-                )
-            }
-        }
-    }
-
     private var idleTimeoutRow: some View {
         SettingsRow(
-            title: "Idle Timeout",
-            description: "Seconds before idle brightness takes over."
+            title: "Dim Lighting After",
+            description: "Seconds of inactivity before the lighting dims. 0 disables it."
         ) {
             if let settings = store.mouseSettings {
                 NumericField(
@@ -288,7 +209,7 @@ struct SettingsDeviceView: View {
                         get: { settings.idleTimeoutSeconds },
                         set: { value in store.mutate { $0.setIdleTimeoutSeconds(value) } }
                     ),
-                    range: 0...3600,
+                    range: 0...1200,
                     step: 5,
                     unit: "sec"
                 )

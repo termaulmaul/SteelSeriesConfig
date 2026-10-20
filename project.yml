@@ -15,7 +15,8 @@ settings:
     ENABLE_HARDENED_RUNTIME: YES
     CLANG_ENABLE_MODULES: YES
     # CI overrides this with the workflow run number; the updater compares it to the release tag.
-    CURRENT_PROJECT_VERSION: 1
+    # 0 marks a local build, which the updater never replaces.
+    CURRENT_PROJECT_VERSION: 0
 
 targets:
   SteelSeriesConfig:
@@ -33,8 +34,8 @@ targets:
         LSMinimumSystemVersion: "14.0"
         LSApplicationCategoryType: public.app-category.utilities
         NSHumanReadableCopyright: ""
-        NSAppTransportSecurity:
-          NSAllowsLocalNetworking: true
+        # SteelSeries GG's own app icon (Resources/sse3.icns).
+        CFBundleIconFile: sse3.icns
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.maul.steelseriesconfig

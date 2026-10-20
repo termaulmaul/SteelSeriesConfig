@@ -327,11 +327,10 @@ struct MouseSettings: Equatable, Sendable {
         ButtonFunction(code: 3, label: "Middle click"),
         ButtonFunction(code: 4, label: "Back"),
         ButtonFunction(code: 5, label: "Forward"),
-        ButtonFunction(code: 12, label: "Tilt left"),
-        ButtonFunction(code: 13, label: "Tilt right"),
         ButtonFunction(code: 48, label: "CPI toggle"),
         ButtonFunction(code: 49, label: "Scroll up"),
-        ButtonFunction(code: 50, label: "Scroll down")
+        ButtonFunction(code: 50, label: "Scroll down"),
+        ButtonFunction(code: 0, label: "Disabled")
     ]
 
     /// Change which action a button performs, by array position.

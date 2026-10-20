@@ -13,9 +13,9 @@ struct BarHeaderView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            EngineDeviceImage(
-                urlString: store.selectedDevice?.imageUrl,
-                fallbackSystemImage: "computermouse",
+            DeviceGlyph(
+                imageName: store.selectedDevice?.imageUrl,
+                systemImage: "computermouse",
                 height: 26
             )
 
@@ -57,14 +57,14 @@ struct BarHeaderView: View {
         guard store.selectedDevice != nil else { return "No device" }
 
         let phase = store.displayPhase
-        guard phase.isUsable, let sync = store.syncStatus else { return phase.label }
+        guard phase.isUsable, store.isDirty else { return phase.label }
 
-        return sync.isSynced.value ? "\(phase.label) · in sync" : "\(phase.label) · not deployed"
+        return "\(phase.label) · unsaved"
     }
 
     private var statusColor: Color {
         if !store.canReachDevice { return .secondary }
-        if let sync = store.syncStatus, !sync.isSynced.value { return .orange }
+        if store.isDirty { return .orange }
         if store.displayPhase == .ready { return .secondary }
         return store.displayPhase.isUsable ? .secondary : .orange
     }

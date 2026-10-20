@@ -4,6 +4,7 @@ SteelSeriesConfig.xcodeproj/
 # Build
 build/
 build-test/
+*.noindex/
 DerivedData/
 *.xcuserstate
 xcuserdata/

@@ -66,9 +66,14 @@ final class UpdateChecker {
         Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0
     }
 
+    /// A build made on this Mac rather than by CI (`CURRENT_PROJECT_VERSION` 0). Its
+    /// number says nothing about its age, so any release would look newer and an
+    /// update would silently replace local work with an older published build.
+    static var isLocalBuild: Bool { installedBuild == 0 }
+
     static var installedDescription: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
-        return "\(version) (build \(installedBuild))"
+        return Self.isLocalBuild ? "\(version) (local build)" : "\(version) (build \(installedBuild))"
     }
 
     /// Why installing is not possible right now, or `nil` when it is.
@@ -107,6 +112,10 @@ final class UpdateChecker {
     /// scheduled check retries, which is safe because nothing outside this Mac changes.
     func checkForUpdates() async {
         guard !isWorking else { return }
+        guard !Self.isLocalBuild else {
+            state = .failed("Local build — updates are disabled.")
+            return
+        }
         state = .checking
 
         do {

@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Engine connection details, maintenance actions, and the app's own provenance.
+/// Device connection details, maintenance actions, and the app's own provenance.
 struct SettingsAppView: View {
 
     @Environment(ConfigurationStore.self) private var store
@@ -9,28 +9,17 @@ struct SettingsAppView: View {
 
     var body: some View {
         Form {
-            Section("Engine") {
+            Section("Device") {
                 SettingsRow(
-                    title: "Endpoint",
-                    description: "Read from \(CorePropsLocator.defaultPath). Discovery falls back to \(CorePropsLocator.fallbackHostAndPort) if the file is missing."
-                ) {
-                    Text(store.engineURL?.absoluteString ?? "Not connected")
-                        .font(.callout)
-                        .monospaced()
-                        .foregroundColor(store.engineURL == nil ? .secondary : .primary)
-                        .frame(minWidth: 150, alignment: .trailing)
-                }
-
-                SettingsRow(
-                    title: "Status",
-                    description: "The engine is the local SteelSeries GG core. This app never contacts SteelSeries' servers and never uses a login."
+                    title: "Connection",
+                    description: "Talks to the mouse directly over HID — cable, 2.4 GHz receiver or Bluetooth. SteelSeries GG is not needed, and nothing is sent to SteelSeries' servers."
                 ) {
                     statusLabel
                 }
 
                 SettingsRow(
                     title: "Devices detected",
-                    description: "Reported by GET /devices on the last scan."
+                    description: "Supported mice found on the HID bus on the last scan."
                 ) {
                     Text("\(store.devices.count)")
                         .font(.callout)
@@ -39,22 +28,22 @@ struct SettingsAppView: View {
                 }
 
                 SettingsRow(
+                    title: "Profile",
+                    description: "The mouse cannot report its settings, so the app keeps them here and re-applies them when the mouse reconnects."
+                ) {
+                    Button("Show in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([LocalProfileStore.fileURL])
+                    }
+                }
+
+                SettingsRow(
                     title: "Rescan",
-                    description: "Re-read coreProps.json and reload devices and configurations."
+                    description: "Reload the profile and look for the mouse again."
                 ) {
                     Button("Rescan") {
                         Task { await store.bootstrap() }
                     }
                     .disabled(store.isBusy)
-                }
-
-                SettingsRow(
-                    title: "SteelSeries GG",
-                    description: "Launch the official app if the engine is not responding. Its own settings are untouched by doing this."
-                ) {
-                    Button("Open GG") {
-                        store.launchEngine()
-                    }
                 }
             }
 
@@ -103,7 +92,7 @@ struct SettingsAppView: View {
             Section("About") {
                 SettingsRow(
                     title: "SteelSeries Config",
-                    description: "Unofficial, login-free configuration tool for SteelSeries peripherals. Not affiliated with SteelSeries. Writes are read-modify-write with an automatic pre-write backup; the settings schema was derived by reverse-engineering the official client."
+                    description: "Unofficial, login-free configuration tool for SteelSeries peripherals. Not affiliated with SteelSeries. Every save is preceded by an automatic backup; the HID protocol follows the open-source rivalcfg project."
                 ) {
                     Text(UpdateChecker.installedDescription)
                         .font(.callout)

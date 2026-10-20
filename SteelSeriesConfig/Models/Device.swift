@@ -59,6 +59,20 @@ struct Device: Identifiable, Codable, Equatable, Sendable {
             (try? container.decodeIfPresent([ConfigurationMetadata].self, forKey: .configurationMetadata)) ?? nil
     }
 
+    /// A mouse found on the HID bus. `imageUrl` then holds a bundled image name.
+    init(id: Int, model: AeroxProtocol.Model, connected: Bool) {
+        self.id = id
+        name = model.name
+        fullName = model.name
+        displayName = model.name
+        deviceTypeName = DeviceCategory.mouse.rawValue
+        type = 0
+        productId = model.productID
+        self.connected = FlexibleBool(connected)
+        imageUrl = model.imageName
+        configurationMetadata = nil
+    }
+
     var category: DeviceCategory { DeviceCategory(deviceTypeName: deviceTypeName) }
 
     var isMouse: Bool { category == .mouse }
