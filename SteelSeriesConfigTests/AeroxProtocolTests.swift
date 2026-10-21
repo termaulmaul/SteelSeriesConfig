@@ -152,11 +152,35 @@ final class AeroxProtocolTests: XCTestCase {
         let settings = try MouseSettings(parsing: Fixture.aeroxSettings)
         let commands = AeroxProtocol.commands(for: settings)
 
-        XCTAssertEqual(commands.count, 7)
+        XCTAssertEqual(commands.count, 10)
         XCTAssertEqual(commands[0][0], 0x2D)
         XCTAssertEqual(Int(commands[0][1]), settings.cpiLevelCount)
         XCTAssertEqual(commands[0].count, 3 + settings.cpiLevelCount)
         XCTAssertEqual(commands[1], AeroxProtocol.pollingRate(hz: settings.pollingRateHz))
+    }
+
+    func testZoneColorsMatchRivalcfg() {
+        XCTAssertEqual(
+            hex(AeroxProtocol.zoneColor(0, color: (255, 0, 0))),
+            "21 01 00 FF 00 00"
+        )
+        XCTAssertEqual(
+            hex(AeroxProtocol.zoneColor(2, color: (0, 0, 255))),
+            "21 01 02 00 00 FF"
+        )
+    }
+
+    /// The three zone commands sit between the timers and the reactive colour, and each
+    /// carries its own zone byte.
+    func testCommandsCarryThreeIndependentZones() throws {
+        let settings = try MouseSettings(parsing: LocalProfileStore.defaultSettings)
+        let commands = AeroxProtocol.commands(for: settings)
+        let zones = Array(commands[4...6])
+
+        XCTAssertEqual(zones.map { $0[0] }, [0x21, 0x21, 0x21])
+        XCTAssertEqual(zones.map { $0[2] }, [0, 1, 2])
+        XCTAssertEqual(zones[0], AeroxProtocol.zoneColor(0, color: (255, 0, 0)))
+        XCTAssertEqual(zones[2], AeroxProtocol.zoneColor(2, color: (0, 0, 255)))
     }
 
     func testDefaultProfileIsAValidMouseDocument() throws {

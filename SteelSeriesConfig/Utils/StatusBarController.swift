@@ -28,8 +28,13 @@ final class StatusBarController: NSObject {
     /// SteelSeries GG's own menu bar glyph (`taskbar.tiff`), shipped as
     /// `StatusBarIcon.png` / `@2x`. Template, so it follows the menu bar's appearance.
     private static let statusIcon: NSImage? = {
-        let image = NSImage(named: "StatusBarIcon")
-        image?.size = NSSize(width: 16, height: 16)
+        // Loose bundle resources are not indexed by `NSImage(named:)`; that lookup only
+        // sees asset catalogues and registered names, so it returned nil and the menu
+        // bar item drew nothing. `Bundle.image(forResource:)` is the lookup that finds
+        // `StatusBarIcon.png`.
+        let image = Bundle.main.image(forResource: "StatusBarIcon")
+            ?? NSImage(named: "StatusBarIcon")
+        image?.size = NSSize(width: 18, height: 18)
         image?.isTemplate = true
         image?.accessibilityDescription = "SteelSeries Config"
         return image

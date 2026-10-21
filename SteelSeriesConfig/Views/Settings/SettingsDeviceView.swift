@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Full mouse configuration editor.
@@ -5,8 +6,8 @@ import SwiftUI
 /// Grouped `Form` rather than a custom layout: on macOS this is what gives you the
 /// native section chrome, correct focus order, and controls that resize with the
 /// window. Everything here writes through `ConfigurationStore.mutate`, which pushes the
-/// change to the device as a live apply and leaves the draft dirty until Save
-/// persists and deploys it for real.
+/// change to the device and persists it to the profile after a short debounce — there
+/// is no separate Apply step.
 struct SettingsDeviceView: View {
 
     @Environment(ConfigurationStore.self) private var store
@@ -14,8 +15,9 @@ struct SettingsDeviceView: View {
     var body: some View {
         VStack(spacing: 0) {
             SettingsDeviceHeader()
-                .padding([.horizontal, .top], 20)
-                .padding(.bottom, 4)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 16)
 
             Divider()
 
@@ -42,7 +44,9 @@ struct SettingsDeviceView: View {
             }
 
             Section("Illumination") {
+                IlluminationZonesEditor()
                 idleTimeoutRow
+                reactiveColorRow
                 toggleRow(
                     "Rainbow at Startup",
                     "Runs the rainbow effect when the mouse powers up.",
@@ -59,11 +63,11 @@ struct SettingsDeviceView: View {
 
             if store.mouseSettings?.hasButtonMappings == true {
                 Section {
-                    buttonRows
+                    ButtonMappingEditor()
                 } header: {
                     Text("Buttons")
                 } footer: {
-                    Text("Pick a different action for each button. Changes reach the mouse immediately; Save keeps them across reconnects.")
+                    Text("Click a button on the mouse or pick its row, then choose an action. Changes save to the profile and the mouse automatically.")
                 }
             }
         }
@@ -198,6 +202,53 @@ struct SettingsDeviceView: View {
 
     // MARK: - Illumination
 
+    private var reactiveColorRow: some View {
+        SettingsRow(
+            title: "Reactive Colour",
+            description: "Colour flashed on clicks when Reactive Lighting is on."
+        ) {
+            if let settings = store.mouseSettings {
+                HStack(spacing: 8) {
+                    Text(String(
+                        format: "#%02X%02X%02X",
+                        settings.reactiveColor.red,
+                        settings.reactiveColor.green,
+                        settings.reactiveColor.blue
+                    ))
+                    .font(.caption.monospaced())
+                    .foregroundColor(.secondary)
+
+                    ColorPicker("", selection: reactiveColorBinding(settings), supportsOpacity: false)
+                        .labelsHidden()
+                        .accessibilityIdentifier("lighting.reactive.color")
+                }
+            }
+        }
+    }
+
+    private func reactiveColorBinding(_ settings: MouseSettings) -> Binding<Color> {
+        Binding(
+            get: {
+                Color(nsColor: NSColor(
+                    srgbRed: CGFloat(settings.reactiveColor.red) / 255,
+                    green: CGFloat(settings.reactiveColor.green) / 255,
+                    blue: CGFloat(settings.reactiveColor.blue) / 255,
+                    alpha: 1
+                ))
+            },
+            set: { newValue in
+                guard let rgb = NSColor(newValue).usingColorSpace(.sRGB) else { return }
+                store.mutate {
+                    $0.setReactiveColor(
+                        red: Int((rgb.redComponent * 255).rounded()),
+                        green: Int((rgb.greenComponent * 255).rounded()),
+                        blue: Int((rgb.blueComponent * 255).rounded())
+                    )
+                }
+            }
+        )
+    }
+
     private var idleTimeoutRow: some View {
         SettingsRow(
             title: "Dim Lighting After",
@@ -213,34 +264,6 @@ struct SettingsDeviceView: View {
                     step: 5,
                     unit: "sec"
                 )
-            }
-        }
-    }
-
-    // MARK: - Buttons
-
-    private var buttonRows: some View {
-        ForEach(store.mouseSettings?.buttons ?? []) { button in
-            SettingsRow(
-                title: button.label,
-                description: "Action code \(button.function)."
-            ) {
-                Picker("", selection: Binding(
-                    get: { button.function },
-                    set: { value in store.mutate { $0.setButtonFunction(at: button.index, function: value) } }
-                )) {
-                    ForEach(MouseSettings.buttonFunctions) { option in
-                        Text(option.label).tag(option.code)
-                    }
-                    // Keep the current code selectable even if it is outside the
-                    // catalog above, so opening the window never silently rewrites an
-                    // action this app does not model.
-                    if !MouseSettings.buttonFunctions.contains(where: { $0.code == button.function }) {
-                        Text("HID \(button.function)").tag(button.function)
-                    }
-                }
-                .labelsHidden()
-                .fixedSize()
             }
         }
     }

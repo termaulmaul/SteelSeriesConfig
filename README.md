@@ -6,10 +6,54 @@ uninstalled.
 
 Menu bar app: click the SteelSeries icon → a popover with CPI presets, the CPI ladder and
 polling-rate controls → a Settings window with the full editor (CPI ladder, power,
-lighting, buttons, backups). Edits reach the mouse as they happen; **Save** keeps them in
-the app's profile and commits them to the mouse's onboard memory.
+lighting, buttons, backups). Every edit saves itself: the change is written to the app's
+profile and committed to the mouse's onboard memory after a short debounce, with no
+Apply step. Illumination and Buttons use mouse previews, so you pick the lighting zone or
+the physical button directly instead of matching a row to a shape.
 
 Not affiliated with SteelSeries.
+
+---
+
+## Screenshots
+
+### Sensitivity
+
+![Sensitivity section: five-step CPI ladder and polling rate](docs/screenshots/sensitivity.png)
+
+The Device tab opens on the CPI ladder. Up to five steps can be enabled; each step has
+its own CPI value and a radio button that makes it the active step. The stepper beside
+*CPI Ladder* adds or removes steps. *Polling Rate* selects 1000, 500, 250 or 125 Hz.
+
+### Illumination
+
+![Illumination section: mouse preview with three lighting zones and colour wells](docs/screenshots/illumination.png)
+
+The three light strips are edited directly on the mouse preview: click a hotspot or a row,
+then pick a colour in the well or type a hex value. Below the zone editor are the shared
+lighting options — dim timer, reactive colour, rainbow at startup and reactive lighting.
+
+### Buttons
+
+![Buttons section: numbered leader lines point at each control, with action pickers](docs/screenshots/buttons.png)
+
+Every physical control gets a numbered tag connected by a leader line, so each row maps to
+a visible part of the mouse instead of an abstract button number. Actions cover the mouse
+buttons, the CPI toggle, the scroll wheel and *Disabled*.
+
+### Backups
+
+![Backups tab listing automatic profile snapshots](docs/screenshots/backups.png)
+
+A JSON snapshot is written automatically before every save. *Load* restores a snapshot,
+*Show Folder* opens the backup directory in Finder, and *Refresh* re-reads it.
+
+### App
+
+![App tab: connection state, profile location, backups, notifications and updates](docs/screenshots/app.png)
+
+The App tab reports the HID connection, the number of supported devices found on the last
+scan, the profile and backup locations, notification preferences and the update check.
 
 ---
 
@@ -37,8 +81,9 @@ network connection except the GitHub update check.
   GG, so existing tuning carries over; otherwise rivalcfg's defaults are used. When the
   mouse is plugged in or wakes up, the profile is re-sent so the mouse always runs what
   the app shows.
-- **Live apply** — edits are debounced (280 ms) and only commands that changed since the
-  last send are written, so dragging the CPI slider does not rewrite the button map.
+- **Live apply** — edits are debounced (500 ms) and only commands that changed since the
+  last send are written, so dragging the CPI slider does not rewrite the button map. The
+  same pass persists the profile and commits the changes to the mouse's flash.
 - **Status** — presence comes from the HID bus. Over the receiver, the battery query
   (`0x92`) doubles as the link check: no answer means the mouse is off or out of range.
 
@@ -50,6 +95,7 @@ network connection except the GitHub update check.
 | Dim timer | `23 0F 01 00 00` | milliseconds, 3 bytes little-endian (max 20 min) |
 | Reactive colour | `26` | `01 00 R G B`, or `00 ×5` for off |
 | Startup lighting | `27` | rainbow, reactive (one byte each) |
+| Zone colour (top / middle / bottom) | `21 01 00/01/02` | `R G B` per strip segment |
 | Buttons | `2A` | 8 × 5-byte slots: B1–B6, scroll up, scroll down |
 | Battery | `92` | reply byte 1: bit 7 charging, level `((b & 0x7F) − 1) × 5` |
 | Save to flash | `11 00` | — |
@@ -61,7 +107,7 @@ network connection except the GitHub update check.
 | Validated writes | `WriteSafetyPolicy` | Empty, non-JSON, non-object or suspiciously shrunk documents are rejected before the profile is written. |
 | Automatic pre-save backup | `BackupStore` | The profile is snapshotted to `~/Library/Application Support/SteelSeriesConfig/backups/` before every save. |
 | No guessed codes | `AeroxProtocol.buttons` | A button action the firmware does not know is never sent; the slot keeps its factory action. |
-| Confirm-then-apply | `BarActionsView` | Re-sending the saved profile needs a second tap within 4 s. |
+| Status-only feedback | `BarActionsView` | A skipped or failed write is reported instead of pretending the edit reached the mouse. |
 | Unparseable profile ⇒ read-only | `ConfigurationStore.apply()` | The UI stays visible but every control is disabled rather than editing a document it does not understand. |
 
 ## Architecture
@@ -107,8 +153,11 @@ xcodebuild -project SteelSeriesConfig.xcodeproj \
            build
 ```
 
-The app is signed ad-hoc (`CODE_SIGN_IDENTITY: "-"`), which is enough for a local build.
-Copy `SteelSeriesConfig.app` from the build products into `/Applications` to install it.
+The Release build is signed ad-hoc (`CODE_SIGN_IDENTITY: "-"`), which is enough to run on
+the machine that built it. A stable Development identity also works and is preferable if
+you reinstall often: ad-hoc signatures change identity on every build, which resets the
+Input Monitoring grant. Copy `SteelSeriesConfig.app` from the build products into
+`/Applications` to install it.
 
 ### Releases and in-app updates
 
@@ -149,9 +198,9 @@ release-manifest parsing. No test needs a mouse attached.
 
 ## Limitations
 
-- **Not yet verified on hardware.** The bytes match rivalcfg, which is used against this
-  mouse in practice, but this app's HID path has not been exercised on a real mouse yet.
-  Treat the first save as an experiment; a backup is taken automatically.
+- **Per-zone colours are new.** The three strip segments use rivalcfg's `21 01 <zone>`
+  command, but the write has not been confirmed on a physical mouse yet. The other
+  commands match rivalcfg and are in daily use.
 - **Bluetooth needs Input Monitoring.** Over Bluetooth LE the mouse appears as one HID
   device (vendor id `0x0111`) that also carries a keyboard collection, so macOS only lets
   the app write to it after *System Settings → Privacy & Security → Input Monitoring* is
@@ -159,19 +208,20 @@ release-manifest parsing. No test needs a mouse attached.
   4 and are the least verified path; cable or receiver is the reference.
 - **Aerox 3 Wireless only.** Other models need their own command table.
 - **Settings the protocol cannot express are hidden**, not faked: angle snapping, Exact
-  Aim/Accel, Low-Power Gaming Mode, brightness, Smart Lighting and per-zone colour
-  sequences. Button remapping is limited to mouse buttons, the CPI toggle, the scroll
-  wheel and *Disabled*.
+  Aim/Accel, Low-Power Gaming Mode, brightness, Smart Lighting and Bluetooth mode.
+  Button remapping covers mouse buttons, the CPI toggle, the scroll wheel and *Disabled*.
+- **No macro editor.** GG's macro and keyboard-key actions need a keycode table and macro
+  format that rivalcfg does not document; the app does not ship a fake version of either.
 - **Settings cannot be read back.** If another tool reprogrammes the mouse, the app does
-  not notice until it next re-sends the profile (on reconnect, or via *Apply*).
+  not notice until it next re-sends the profile (on reconnect or wake).
 
 ## Provenance
 
 The HID protocol comes from [rivalcfg](https://github.com/flozz/rivalcfg) (WTFPL) by
 Fabien Loison and contributors. The settings document layout was originally taken from
-the SteelSeries GG client, which this app no longer needs. The app icon, menu bar
-glyph and product artwork are SteelSeries' own assets, copied from the GG bundle; they are trademarks of
-SteelSeries and are not covered by this project's licence.
+the SteelSeries GG client, which this app no longer needs. The app icon, menu bar glyph
+and product artwork are SteelSeries' own assets, copied from the GG bundle; they are
+trademarks of SteelSeries and are not covered by this project's licence.
 
 The UI follows the menu-bar-popover pattern of
 [nothing-bar](https://github.com/bestK1ngArthur/nothing-bar): a borderless non-activating

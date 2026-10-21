@@ -98,6 +98,14 @@ enum AeroxProtocol {
         return [0x26, 0x01, 0x00, byte(color.red), byte(color.green), byte(color.blue)]
     }
 
+    /// Colour of one strip segment (`z1`…`z3` in rivalcfg).
+    ///
+    /// `21 01 <zone> R G B`. Rivalcfg labels the zones "strip top / middle / bottom";
+    /// they are independent, so each gets its own command.
+    static func zoneColor(_ zone: Int, color: (red: Int, green: Int, blue: Int)) -> [UInt8] {
+        [0x21, 0x01, byte(zone), byte(color.red), byte(color.green), byte(color.blue)]
+    }
+
     /// Lighting the mouse falls back to on power-up.
     static func defaultLighting(rainbow: Bool, reactive: Bool) -> [UInt8] {
         [0x27, rainbow ? 0x01 : 0x00, reactive ? 0x01 : 0x00]
@@ -131,6 +139,13 @@ enum AeroxProtocol {
     /// position by position to send only what changed.
     static func commands(for settings: MouseSettings) -> [[UInt8]] {
         let count = settings.cpiLevelCount
+        let zones = MouseSettings.LightingZone.all.map { zone -> [UInt8] in
+            let color = settings.zoneColor(zone)
+            return zoneColor(
+                zone.index,
+                color: (red: color.red, green: color.green, blue: color.blue)
+            )
+        }
         return [
             sensitivity(
                 levels: Array(settings.cpiLevels.prefix(count)),
@@ -139,6 +154,7 @@ enum AeroxProtocol {
             pollingRate(hz: settings.pollingRateHz),
             sleepTimer(milliseconds: settings.powerSaveSeconds * 1000),
             dimTimer(milliseconds: settings.idleTimeoutSeconds * 1000),
+        ] + zones + [
             reactiveColor(settings.reactiveLightingEnabled ? settings.reactiveColor : nil),
             defaultLighting(
                 rainbow: settings.defaultLightingEnabled,

@@ -78,7 +78,7 @@ final class UpdateChecker {
 
     /// Why installing is not possible right now, or `nil` when it is.
     var installBlockReason: String? {
-        if store.isBusy || store.isLiveApplying {
+        if store.isBusy {
             return "Wait for the current save to finish."
         }
         if store.isDirty {

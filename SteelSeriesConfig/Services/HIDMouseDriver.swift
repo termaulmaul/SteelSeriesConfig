@@ -46,6 +46,7 @@ final class HIDMouseDriver {
     private let inputBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 128)
     private var inputReports: [(id: UInt32, bytes: [UInt8])] = []
     private var isOpen = false
+    private var writableDevice: IOHIDDevice?
     private var requestedAccess = false
 
     private init() {
@@ -62,19 +63,49 @@ final class HIDMouseDriver {
     /// a Bluetooth mouse is attached; enumeration still works, so presence is known.
     private func openIfPossible() {
         guard !isOpen else { return }
-        isOpen = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone)) == kIOReturnSuccess
+        let result = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        // Already open by us reads back as exclusive access, which still allows writes.
+        isOpen = result == kIOReturnSuccess || result == kIOReturnExclusiveAccess
+    }
+
+    private func openDevice(_ device: IOHIDDevice) -> IOReturn {
+        if let writableDevice, CFEqual(writableDevice, device) { return kIOReturnSuccess }
+        let result = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
+        if result == kIOReturnSuccess { writableDevice = device }
+        return result
+    }
+
+    /// Drop the cached open state so the next write re-opens the manager and device.
+    private func invalidateOpenState() {
+        isOpen = false
+        writableDevice = nil
+    }
+
+    private func requestInputMonitoringIfNeeded() {
+        guard !requestedAccess,
+              IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) != kIOHIDAccessTypeGranted
+        else { return }
+        requestedAccess = true
+        IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
     }
 
     /// Whether settings can be written right now. Asks for Input Monitoring once, the
     /// first time a Bluetooth mouse needs it.
+    ///
+    /// The manager being open is not enough on its own: macOS closes the individual
+    /// device when the mouse sleeps or reconnects, and `isOpen` is a one-way flag, so a
+    /// stale `true` only surfaces later as `kIOReturnNotOpen` from the write itself.
+    /// Open the device too, and treat a refused open as the permission problem it is.
     func ensureWritable(_ mouse: Attached) throws {
         openIfPossible()
-        guard !isOpen, mouse.model.transport == .bluetooth else { return }
-        if !requestedAccess, IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) != kIOHIDAccessTypeGranted {
-            requestedAccess = true
-            IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+        let opened = openDevice(mouse.device)
+        guard opened != kIOReturnSuccess else { return }
+
+        if opened == kIOReturnNotPermitted {
+            requestInputMonitoringIfNeeded()
+            throw DriverError.needsInputMonitoring
         }
-        throw DriverError.needsInputMonitoring
+        throw DriverError.writeFailed(opened)
     }
 
     /// The configurable interface of the first supported mouse, or `nil`.
@@ -103,7 +134,6 @@ final class HIDMouseDriver {
 
     /// Send one command, then wait the inter-command delay.
     func send(_ command: [UInt8], to mouse: Attached) async throws {
-        try ensureWritable(mouse)
         let reportID = Self.reportID(for: mouse)
         var report = AeroxProtocol.addressed(command, wireless: mouse.model.isWireless)
         // A numbered report is sent with its id as the first byte.
@@ -111,11 +141,27 @@ final class HIDMouseDriver {
         if report.count < mouse.outputReportSize {
             report += [UInt8](repeating: 0, count: mouse.outputReportSize - report.count)
         }
-        let result = report.withUnsafeBufferPointer {
-            IOHIDDeviceSetReport(mouse.device, kIOHIDReportTypeOutput, reportID, $0.baseAddress!, $0.count)
+
+        try ensureWritable(mouse)
+        var result = write(report, reportID: reportID, to: mouse)
+
+        // The device can be closed underneath a live handle when the mouse sleeps and
+        // reconnects. The cached open state cannot see that, so reopen once and retry
+        // before reporting the failure to the user.
+        if result == kIOReturnNotOpen {
+            invalidateOpenState()
+            try ensureWritable(mouse)
+            result = write(report, reportID: reportID, to: mouse)
         }
+
         guard result == kIOReturnSuccess else { throw DriverError.writeFailed(result) }
         try? await Task.sleep(for: Self.commandDelay)
+    }
+
+    private func write(_ report: [UInt8], reportID: CFIndex, to mouse: Attached) -> IOReturn {
+        report.withUnsafeBufferPointer {
+            IOHIDDeviceSetReport(mouse.device, kIOHIDReportTypeOutput, reportID, $0.baseAddress!, $0.count)
+        }
     }
 
     /// Send a command and return the first input report that follows it, or `nil`

@@ -56,7 +56,6 @@ final class ConfigurationStore {
     var isBusy = false
     /// True when the local edits diverge from the saved profile.
     var isDirty = false
-    private(set) var isLiveApplying = false
 
     var statusMessage: String?
     var statusIsError = false
@@ -72,7 +71,7 @@ final class ConfigurationStore {
     private var sentCommands: [[UInt8]]?
     private var attachedProductID: Int?
 
-    private var liveApplyTask: Task<Void, Never>?
+    private var autoSaveTask: Task<Void, Never>?
     private var statusLoop: Task<Void, Never>?
 
     init(driver: HIDMouseDriver = .shared) {
@@ -128,7 +127,7 @@ final class ConfigurationStore {
         guard let draft else { return }
         apply(draft)
         announce("Edits discarded.", error: false)
-        scheduleLiveApply()
+        scheduleAutoSave()
     }
 
     private func apply(_ config: DeviceConfiguration) {
@@ -140,38 +139,35 @@ final class ConfigurationStore {
 
     // MARK: - Editing
 
-    /// Apply a change to the parsed settings, then push it to the mouse (debounced).
-    /// The draft stays dirty until `save()`.
+    /// Apply a change to the parsed settings, then persist it and push it to the mouse.
+    /// Saves are debounced so dragging a slider writes once, not once per pixel.
     func mutate(_ changes: (inout MouseSettings) -> Void) {
         guard var settings = mouseSettings else { return }
         changes(&settings)
         mouseSettings = settings
         isDirty = true
-        scheduleLiveApply()
+        scheduleAutoSave()
     }
 
-    private func scheduleLiveApply() {
-        liveApplyTask?.cancel()
-        liveApplyTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(280))
+    private func scheduleAutoSave() {
+        autoSaveTask?.cancel()
+        autoSaveTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
-            await self?.liveApply()
+            await self?.autoSave()
         }
     }
 
-    /// Push the current settings to the mouse without persisting them.
-    func liveApply() async {
-        guard let settings = mouseSettings, !isBusy, canReachDevice else { return }
-        isLiveApplying = true
-        defer { isLiveApplying = false }
-
-        do {
-            if try await send(settings) {
-                announce("Applied to the device.", error: false)
-            }
-        } catch {
-            announce(error.localizedDescription, error: true)
+    /// Persist the current edit and commit it to the mouse's memory.
+    ///
+    /// If a previous save is still in flight the last edit would otherwise be dropped,
+    /// so this waits for the writer to become free before running.
+    private func autoSave() async {
+        while isBusy {
+            try? await Task.sleep(for: .milliseconds(120))
+            if Task.isCancelled { return }
         }
+        _ = await save()
     }
 
     /// Persist the profile, then commit it to the mouse's onboard memory.
@@ -278,7 +274,7 @@ final class ConfigurationStore {
     /// One poll: presence on the HID bus, then the battery query, which doubles as the
     /// link check over the receiver (no answer = mouse off or out of range).
     private func pollDeviceStatus() async {
-        guard phase == .ready, !isBusy, !isLiveApplying else { return }
+        guard phase == .ready, !isBusy else { return }
 
         guard let mouse = driver.attached() else {
             if !devices.isEmpty { devices = [] }
@@ -416,7 +412,7 @@ final class ConfigurationStore {
             let restored = try BackupStore.read(url)
             mouseSettings = try MouseSettings(parsing: restored.settings)
             isDirty = true
-            scheduleLiveApply()
+            scheduleAutoSave()
             announce("Backup loaded. Save to keep it.", error: false)
         } catch {
             announce(error.localizedDescription, error: true)

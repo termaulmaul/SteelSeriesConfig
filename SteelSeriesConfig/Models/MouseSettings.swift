@@ -304,6 +304,84 @@ struct MouseSettings: Equatable, Sendable {
         setInt(clamped(blue, 0, 255), "reactive_lighting", "color", "b")
     }
 
+    // MARK: Illumination zones
+
+    /// The three independently addressable segments of the Aerox 3 light strip.
+    ///
+    /// rivalcfg writes them with `21 01 <zone> R G B` (`z1_color`…`z3_color`), where
+    /// `zone` is `0`, `1`, `2` for the top, middle and bottom strip. The engine stores
+    /// the same colours as `aerox_3_wireless_z{1,2,3}_color_sequence`; those sequences
+    /// are read as a fallback so a document written by GG shows its real colours.
+    struct LightingZone: Identifiable, Equatable, Sendable {
+        let index: Int
+        let title: String
+        let detail: String
+
+        var id: Int { index }
+
+        static let all: [LightingZone] = [
+            LightingZone(
+                index: 0,
+                title: "Top strip",
+                detail: "Segment nearest the buttons."
+            ),
+            LightingZone(
+                index: 1,
+                title: "Middle strip",
+                detail: "Segment along the side of the base."
+            ),
+            LightingZone(
+                index: 2,
+                title: "Bottom strip",
+                detail: "Segment at the back of the base."
+            )
+        ]
+    }
+
+    /// One zone's colour, 0…255 per channel.
+    struct LightingColor: Equatable, Sendable {
+        var red: Int
+        var green: Int
+        var blue: Int
+
+        /// rivalcfg's own defaults for `z1`…`z3`: red, lime, blue.
+        static let defaults: [LightingColor] = [
+            LightingColor(red: 255, green: 0, blue: 0),
+            LightingColor(red: 0, green: 255, blue: 0),
+            LightingColor(red: 0, green: 0, blue: 255)
+        ]
+    }
+
+    /// Colour shown for one strip. Prefers this app's `lighting_zones` record, then the
+    /// first frame of GG's colour sequence, then rivalcfg's default.
+    func zoneColor(_ zone: LightingZone) -> LightingColor {
+        let key = "z\(zone.index + 1)"
+        if let entry = value(["lighting_zones", key])?.objectValue,
+           let red = entry["r"]?.intValue,
+           let green = entry["g"]?.intValue,
+           let blue = entry["b"]?.intValue {
+            return LightingColor(red: red, green: green, blue: blue)
+        }
+
+        if let frame = value(["aerox_3_wireless_z\(zone.index + 1)_color_sequence", "data"])?
+            .arrayValue?.first?.arrayValue,
+           frame.count >= 3,
+           let red = frame[0].intValue,
+           let green = frame[1].intValue,
+           let blue = frame[2].intValue {
+            return LightingColor(red: red, green: green, blue: blue)
+        }
+
+        return LightingColor.defaults[zone.index]
+    }
+
+    mutating func setZoneColor(_ zone: LightingZone, _ color: LightingColor) {
+        let key = "z\(zone.index + 1)"
+        set(.int(clamped(color.red, 0, 255)), ["lighting_zones", key, "r"])
+        set(.int(clamped(color.green, 0, 255)), ["lighting_zones", key, "g"])
+        set(.int(clamped(color.blue, 0, 255)), ["lighting_zones", key, "b"])
+    }
+
     // MARK: Buttons
 
     var buttons: [MouseButton] {
@@ -339,10 +417,9 @@ struct MouseSettings: Equatable, Sendable {
     /// field of the surrounding `button_mappings` object are preserved, the same
     /// read-modify-write discipline the rest of this type follows.
     ///
-    /// Note this key is marked `no_live_deploy`, so the change cannot reach the device
-    /// on its own — a live apply strips it (see ``encodedStringForLiveDeploy()``). It
-    /// takes effect when Save deploys the full configuration, which is also the only
-    /// write path that backs the document up first.
+    /// Note this key is marked `no_live_deploy` in the engine's own document, so the
+    /// engine's fast path strips it. This app sends the button map as its own HID
+    /// command and the automatic save deploys that along with the rest of the profile.
     mutating func setButtonFunction(at index: Int, function: Int) {
         guard var mappings = value(["button_mappings"])?.objectValue,
               var array = mappings["buttons"]?.arrayValue,

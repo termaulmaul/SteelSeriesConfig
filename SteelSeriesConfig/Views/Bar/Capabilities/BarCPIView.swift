@@ -40,17 +40,22 @@ struct BarCPIView: View {
                         }
                     }
 
-                    // The knob is drawn 20pt tall inside a 16pt frame, so it spills 2pt past
-                    // the slider on each side and eats into the gaps the stack hands it. Pad
-                    // the overhang back, or the knob crowds the labels and reads as touching.
-                    Slider(value: activeCPIBinding, in: Double(MouseSettings.cpiMinimum)...Double(MouseSettings.cpiMaximum), step: Double(MouseSettings.cpiScale))
-                        .padding(.vertical, BarMetrics.knobOverhang)
-                        .disabled(store.isBusy || !store.canReachDevice)
+                    // Native macOS sliders paint a hairline under the track, which reads
+                    // as a stray divider here. BarSlider draws the capsule itself.
+                    BarSlider(
+                        value: activeCPIBinding,
+                        range: Double(MouseSettings.cpiMinimum)...Double(MouseSettings.cpiMaximum),
+                        step: Double(MouseSettings.cpiScale)
+                    )
+                    .disabled(store.isBusy || !store.canReachDevice)
+                    .accessibilityIdentifier("cpi.slider")
 
                     HStack {
                         Text("\(MouseSettings.cpiMinimum)")
+                            .accessibilityIdentifier("cpi.range.min")
                         Spacer()
                         Text("\(MouseSettings.cpiMaximum)")
+                            .accessibilityIdentifier("cpi.range.max")
                     }
                     .font(.caption)
                     .foregroundColor(.secondary)

@@ -65,6 +65,37 @@ final class MouseSettingsTests: XCTestCase {
         XCTAssertEqual(settings.pollingRateHz, 125)
     }
 
+    func testZoneColoursDefaultAndWriteIndependently() throws {
+        var settings = try MouseSettings(parsing: LocalProfileStore.defaultSettings)
+        let zones = MouseSettings.LightingZone.all
+
+        XCTAssertEqual(settings.zoneColor(zones[0]), MouseSettings.LightingColor(red: 255, green: 0, blue: 0))
+        XCTAssertEqual(settings.zoneColor(zones[2]), MouseSettings.LightingColor(red: 0, green: 0, blue: 255))
+
+        settings.setZoneColor(zones[1], MouseSettings.LightingColor(red: 1, green: 2, blue: 3))
+
+        XCTAssertEqual(settings.zoneColor(zones[1]), MouseSettings.LightingColor(red: 1, green: 2, blue: 3))
+        XCTAssertEqual(
+            settings.zoneColor(zones[0]),
+            MouseSettings.LightingColor(red: 255, green: 0, blue: 0),
+            "Sibling zone changed."
+        )
+    }
+
+    /// A document written by GG stores colours as a sequence; the first frame is the
+    /// colour the user picked, so it is a sensible fallback before this app writes one.
+    func testZoneColourFallsBackToGGSequence() throws {
+        let document = """
+        {"aerox_3_wireless_z2_color_sequence": {"data": [[12, 34, 56], [0, 0, 0]], "repeat": 255}}
+        """
+        let settings = try MouseSettings(parsing: document)
+
+        XCTAssertEqual(
+            settings.zoneColor(MouseSettings.LightingZone.all[1]),
+            MouseSettings.LightingColor(red: 12, green: 34, blue: 56)
+        )
+    }
+
     /// Editing one leaf must not flatten its parent or lose siblings.
     func testNestedEditsPreserveSiblings() throws {
         var settings = try MouseSettings(parsing: Fixture.aeroxSettings)

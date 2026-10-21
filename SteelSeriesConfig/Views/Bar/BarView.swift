@@ -15,11 +15,6 @@ enum BarMetrics {
     static let width: CGFloat = 320
     /// Content column inside the panel padding.
     static let column: CGFloat = width - 2 * l
-
-    /// How far a `Slider`'s knob spills past the control's own frame. AppKit draws a
-    /// 20pt knob in a 16pt slider, so 2pt hangs off the top and the bottom; a gap the
-    /// layout declares next to a slider loses that much again.
-    static let knobOverhang: CGFloat = 2
 }
 
 /// Content of the menu bar popover.
@@ -105,7 +100,7 @@ struct BarView: View {
 
             // A save that failed just as the device dropped is the one case worth
             // keeping on screen while the controls are gone.
-            if store.canReachDevice || store.statusMessage != nil {
+            if store.statusMessage != nil {
                 sectionDivider
                 BarActionsView()
                     .padding(BarMetrics.m)

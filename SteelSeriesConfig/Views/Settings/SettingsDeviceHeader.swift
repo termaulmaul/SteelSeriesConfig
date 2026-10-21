@@ -32,29 +32,20 @@ struct SettingsDeviceHeader: View {
             }
 
             Spacer()
-
-            Button("Discard") {
-                store.reloadDraft()
-            }
-            .disabled(!store.isDirty || store.isBusy)
-
-            Button("Save") {
-                Task { await store.save() }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(!store.isDirty || store.isBusy)
-            .help("Save the profile and write it to the mouse's onboard memory.")
         }
         .padding(.vertical, 4)
     }
 
     @ViewBuilder
     private var statusBadge: some View {
+        let isSaving = store.isBusy || store.isDirty
+
         Label(
-            store.isDirty ? "Unsaved changes" : "Saved",
-            systemImage: store.isDirty ? "pencil.circle" : "checkmark.circle.fill"
+            isSaving ? "Saving…" : "Saved",
+            systemImage: isSaving ? "arrow.triangle.2.circlepath" : "checkmark.circle.fill"
         )
         .font(.caption)
-        .foregroundColor(store.isDirty ? .orange : .green)
+        .foregroundColor(isSaving ? .orange : .green)
+        .help("Edits are written to the profile and the mouse automatically.")
     }
 }
