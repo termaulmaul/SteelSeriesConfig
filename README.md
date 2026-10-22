@@ -17,6 +17,14 @@ Not affiliated with SteelSeries.
 
 ## Screenshots
 
+### Menu bar
+
+![Menu bar popover: device status, CPI presets, CPI ladder and polling rate](docs/screenshots/home.png)
+
+Clicking the menu bar icon opens the everyday controls: connection and battery state,
+CPI presets, the five-step CPI ladder and polling rate. The footer reports the last write
+to the mouse.
+
 ### Sensitivity
 
 ![Sensitivity section: five-step CPI ladder and polling rate](docs/screenshots/sensitivity.png)
@@ -45,8 +53,8 @@ buttons, the CPI toggle, the scroll wheel and *Disabled*.
 
 ![Backups tab listing automatic profile snapshots](docs/screenshots/backups.png)
 
-A JSON snapshot is written automatically before every save. *Load* restores a snapshot,
-*Show Folder* opens the backup directory in Finder, and *Refresh* re-reads it.
+A JSON snapshot is written automatically before every write to the engine. *Load* restores
+a snapshot, *Show Folder* opens the backup directory in Finder, and *Refresh* re-reads it.
 
 ### App
 
